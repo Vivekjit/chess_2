@@ -730,7 +730,15 @@ function initGame() {
 
 function initSocket() {
     try {
+        if (typeof io === 'undefined') {
+            console.warn('Socket.io not found (Static mode active). Online play unavailable.');
+            return;
+        }
         socket = io();
+        socket.on('connect_error', () => {
+            console.warn('Could not connect to multiplayer server. Switching to Offline Mode.');
+            socket = null;
+        });
         socket.on('room_created', ({ roomId: rid, color }) => {
             roomId = rid; myColor = color; isOnline = true;
             $('header-room-id').textContent = rid;
@@ -752,7 +760,10 @@ function initSocket() {
         socket.on('receive_state', s => loadState(s));
         socket.on('opponent_joined', () => showFlash('Opponent joined!'));
         socket.on('opponent_disconnected', () => showFlash('Opponent left.'));
-    } catch (e) { console.warn('Socket offline', e); }
+    } catch (e) {
+        console.warn('Offline Mode', e);
+        socket = null;
+    }
 }
 
 function syncState() {
