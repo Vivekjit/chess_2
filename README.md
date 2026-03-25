@@ -16,7 +16,9 @@ Chess 2 is a tactical chess variant played on a **6×10 board** where **every pi
 4. Open `http://localhost:3000`.
 
 ## 🌐 Deployment
-This project is ready for deployment on **Render** or **Railway**:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Vivekjit/chess_2)
+
+This project is optimized for **Render** (supports Node.js + WebSockets):
 - **Build Command**: `npm install`
 - **Start Command**: `node server.js`
 - **Port**: 3000 (standard in server.js)
