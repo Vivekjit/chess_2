@@ -9,61 +9,73 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rooms: { roomId: { players: [socket.id, socket.id], state: gameState } }
+// Rooms: { roomId: { players: [socket.id, socket.id], clocks: { white: 300, dark: 300 }, activeColor: 'white', interval: null } }
 const rooms = {};
 
 function generateRoomId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function startTimer(roomId) {
+  if (rooms[roomId].interval) return;
+  rooms[roomId].interval = setInterval(() => {
+    const room = rooms[roomId];
+    if (room.players.length < 2) return; // Wait for both
+
+    room.clocks[room.activeColor]--;
+
+    io.to(roomId).emit('timer_update', { clocks: room.clocks, activeColor: room.activeColor });
+
+    if (room.clocks[room.activeColor] <= 0) {
+      clearInterval(room.interval);
+      io.to(roomId).emit('timeout', { winner: room.activeColor === 'white' ? 'dark' : 'white' });
+    }
+  }, 1000);
+}
+
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  // Create a new room
   socket.on('create_room', () => {
     const roomId = generateRoomId();
-    rooms[roomId] = { players: [socket.id], state: null };
+    rooms[roomId] = {
+      players: [socket.id],
+      clocks: { white: 300, dark: 300 },
+      activeColor: 'white',
+      interval: null
+    };
     socket.join(roomId);
     socket.emit('room_created', { roomId, color: 'white' });
-    console.log(`Room created: ${roomId}`);
   });
 
-  // Join existing room
   socket.on('join_room', ({ roomId }) => {
-    const room = rooms[roomId.toUpperCase()];
-    if (!room) {
-      socket.emit('error', { message: 'Room not found.' });
-      return;
-    }
-    if (room.players.length >= 2) {
-      socket.emit('error', { message: 'Room is full.' });
-      return;
-    }
+    const id = roomId.toUpperCase();
+    const room = rooms[id];
+    if (!room) return socket.emit('error', { message: 'Room not found.' });
+    if (room.players.length >= 2) return socket.emit('error', { message: 'Room is full.' });
+
     room.players.push(socket.id);
-    socket.join(roomId.toUpperCase());
-    socket.emit('room_joined', { roomId: roomId.toUpperCase(), color: 'dark' });
-    // Notify the first player that the opponent joined
+    socket.join(id);
+    socket.emit('room_joined', { roomId: id, color: 'dark' });
     io.to(room.players[0]).emit('opponent_joined');
-    console.log(`Player joined room: ${roomId.toUpperCase()}`);
+
+    startTimer(id);
   });
 
-  // Relay a move to the opponent
-  socket.on('send_move', ({ roomId, moveData }) => {
-    socket.to(roomId).emit('receive_move', moveData);
-  });
-
-  // Relay game state sync
   socket.on('sync_state', ({ roomId, state }) => {
-    socket.to(roomId).emit('receive_state', state);
+    const room = rooms[roomId];
+    if (room) {
+      room.activeColor = state.currentPlayer; // Server follows client turn state
+      socket.to(roomId).emit('receive_state', state);
+    }
   });
 
-  // Handle disconnect
   socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
-    for (const [roomId, room] of Object.entries(rooms)) {
+    for (const [id, room] of Object.entries(rooms)) {
       if (room.players.includes(socket.id)) {
-        socket.to(roomId).emit('opponent_disconnected');
-        delete rooms[roomId];
+        if (room.interval) clearInterval(room.interval);
+        socket.to(id).emit('opponent_disconnected');
+        delete rooms[id];
         break;
       }
     }

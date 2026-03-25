@@ -46,6 +46,10 @@ let myColor = null;
 let roomId = null;
 let isOnline = false;
 
+// QoL features
+let playerViewColor = COLORS.WHITE; // Board orientation preference
+let moveHistory = []; // Stack of states for Undo
+
 // ===== DOM =====
 const $ = id => document.getElementById(id);
 
@@ -275,32 +279,40 @@ function renderBoard() {
     const boardEl = $('chess-board');
     boardEl.innerHTML = '';
 
-    // Visual order: row 9 (rank 10) at top → row 0 (rank 1) at bottom
-    for (let vRow = ROWS - 1; vRow >= 0; vRow--) {
-        const row = vRow;
-        for (let col = 0; col < COLS; col++) {
+    // Determine rendering order based on playerViewColor
+    const rows = [];
+    if (playerViewColor === COLORS.WHITE) {
+        for (let r = 0; r < ROWS; r++) rows.push(r);
+    } else {
+        for (let r = ROWS - 1; r >= 0; r--) rows.push(r);
+    }
+
+    const cols = [];
+    if (playerViewColor === COLORS.WHITE) {
+        for (let c = 0; c < COLS; c++) cols.push(c);
+    } else {
+        for (let c = COLS - 1; c >= 0; c--) cols.push(c);
+    }
+
+    // Visual display: outer loop handles vertical stack
+    // We want the player's 'home' rank at the bottom.
+    // If White: Row 9 at top, Row 0 at bottom.
+    // If Dark: Row 0 at top, Row 9 at bottom.
+    const displayRows = [...rows].reverse();
+
+    displayRows.forEach(row => {
+        cols.forEach(col => {
             const tile = document.createElement('div');
             tile.className = 'tile ' + ((row + col) % 2 === 0 ? 'light' : 'dark-tile');
             tile.dataset.row = row;
             tile.dataset.col = col;
 
-            // Last move highlight (subtle yellow tint)
-            if (lastMoveHighlights.some(h => h.row === row && h.col === col)) {
-                tile.classList.add('last-move');
-            }
+            if (lastMoveHighlights.some(h => h.row === row && h.col === col)) tile.classList.add('last-move');
+            if (selectedCell && selectedCell.row === row && selectedCell.col === col) tile.classList.add('selected');
 
-            // Selected piece
-            if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
-                tile.classList.add('selected');
-            }
-
-            // Check available moves for this tile
             const avail = availableMoves.find(m => m.row === row && m.col === col);
-            if (avail) {
-                tile.classList.add(avail.isCapture ? 'avail-capture' : 'avail-move');
-            }
+            if (avail) tile.classList.add(avail.isCapture ? 'avail-capture' : 'avail-move');
 
-            // Piece
             const piece = board[row][col];
             if (piece) {
                 const img = document.createElement('img');
@@ -312,27 +324,40 @@ function renderBoard() {
 
             tile.addEventListener('click', handleTileClick);
             boardEl.appendChild(tile);
-        }
-    }
+        });
+    });
 
     renderLabels();
     updateUI();
 }
 
 function renderLabels() {
-    // Rank labels: 10 at top → 1 at bottom (matching visual board)
     const rankEl = $('rank-labels');
+    const fileEl = $('file-labels');
     rankEl.innerHTML = '';
-    for (let rank = ROWS; rank >= 1; rank--) {
+    fileEl.innerHTML = '';
+
+    const ranks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const files = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    if (playerViewColor === COLORS.DARK) {
+        // Ranks stay 1-10 but order changes if we want 10 at top for White, 1 at top for Dark?
+        // Usually, 1 is at the bottom for the player.
+        ranks.reverse();
+    } else {
+        ranks.reverse(); // Default: 10 at top, 1 at bottom
+    }
+
+    if (playerViewColor === COLORS.DARK) files.reverse();
+
+    ranks.forEach(r => {
         const lbl = document.createElement('div');
         lbl.className = 'rank-label';
-        lbl.textContent = rank;
+        lbl.textContent = r;
         rankEl.appendChild(lbl);
-    }
-    // File labels
-    const fileEl = $('file-labels');
-    fileEl.innerHTML = '';
-    FILES.forEach(f => {
+    });
+
+    files.forEach(f => {
         const lbl = document.createElement('div');
         lbl.className = 'file-label';
         lbl.textContent = f;
@@ -486,6 +511,7 @@ function executeTurn(fromRow, fromCol, dest) {
 }
 
 function finalizeTurn(notation) {
+    saveToHistory();
     logMove(notation);
     const winner = checkWin(board);
     if (winner) { triggerGameOver(winner); return; }
@@ -496,6 +522,42 @@ function finalizeTurn(notation) {
         setTimeout(makeAIMove, 600);
     }
 }
+
+function saveToHistory() {
+    const snap = {
+        board: JSON.parse(JSON.stringify(board)),
+        currentPlayer,
+        turnNumber,
+        gameOver,
+        lastMoveHighlights: [...lastMoveHighlights],
+        capturedByWhite: [...capturedByWhite],
+        capturedByDark: [...capturedByDark],
+        moveLog: JSON.parse(JSON.stringify(moveLog))
+    };
+    moveHistory.push(snap);
+}
+
+function undoMove() {
+    if (moveHistory.length === 0) return;
+    const last = moveHistory.pop();
+    board = last.board;
+    currentPlayer = last.currentPlayer;
+    actionPhase = last.actionPhase;
+    turnNumber = last.turnNumber;
+    gameOver = last.gameOver;
+    lastMoveHighlights = last.lastMoveHighlights;
+
+    selectedCell = null; availableMoves = [];
+    renderBoard();
+    updateUI();
+
+    // Remove last entry from visual log (simplification)
+    const list = $('move-log-list');
+    if (list.lastChild && list.children.length > 1) list.removeChild(list.lastChild);
+
+    showFlash("Turn Undone", 1000);
+}
+
 
 // ===== MOVE LOG =====
 let turnNumber = 1;
@@ -597,6 +659,14 @@ function evaluateBoard(testBoard) {
         }
     }
     return score;
+}
+
+function updateClockUI(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const el = $('game-clock');
+    if (el) el.textContent = timeStr;
 }
 
 function makeAIMove() {
@@ -721,10 +791,13 @@ function initGame() {
     moveLog = []; capturedByWhite = []; capturedByDark = [];
     gameOver = false; pendingPromotion = null; turnNumber = 1;
     aiThinking = false;
+    moveHistory = [];
+    saveToHistory(); // Initial state
 
     $('move-log-list').innerHTML = '<div style="color:var(--text-secondary);font-size:12px;padding:4px;">Game started. White to move.</div>';
     $('gameover-modal').classList.remove('active');
     $('promotion-modal').classList.remove('active');
+    $('lobby-modal').classList.remove('active');
     renderBoard();
 }
 
@@ -758,6 +831,12 @@ function initSocket() {
             showStartScreen(false); initGame();
         });
         socket.on('receive_state', s => loadState(s));
+        socket.on('timer_update', ({ clocks, activeColor }) => {
+            updateClockUI(clocks[activeColor]);
+        });
+        socket.on('timeout', ({ winner }) => {
+            triggerGameOver(winner, "Time Out!");
+        });
         socket.on('opponent_joined', () => showFlash('Opponent joined!'));
         socket.on('opponent_disconnected', () => showFlash('Opponent left.'));
     } catch (e) {
@@ -802,8 +881,32 @@ function showStartScreen(show) {
 
 document.addEventListener('DOMContentLoaded', () => {
     initSocket(); initGame();
-    $('btn-local').addEventListener('click', () => { isOnline = false; isVsAI = false; showStartScreen(false); initGame(); });
-    $('btn-vs-ai').addEventListener('click', () => { isOnline = false; isVsAI = true; showStartScreen(false); initGame(); });
+
+    $('btn-local').addEventListener('click', () => {
+        isOnline = false; isVsAI = false;
+        $('lobby-modal').classList.add('active');
+    });
+
+    $('pick-white').addEventListener('click', () => {
+        playerViewColor = COLORS.WHITE;
+        $('lobby-modal').classList.remove('active');
+        showStartScreen(false); initGame();
+    });
+
+    $('pick-dark').addEventListener('click', () => {
+        playerViewColor = COLORS.DARK;
+        $('lobby-modal').classList.remove('active');
+        showStartScreen(false); initGame();
+    });
+
+    $('btn-vs-ai').addEventListener('click', () => {
+        isOnline = false; isVsAI = true;
+        playerViewColor = COLORS.WHITE;
+        showStartScreen(false); initGame();
+    });
+
+    $('btn-undo').addEventListener('click', undoMove);
+
     $('btn-create-room').addEventListener('click', () => socket.emit('create_room'));
     $('btn-join-room').addEventListener('click', () => {
         const id = $('join-room-input').value.trim().toUpperCase();

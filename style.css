@@ -2,23 +2,25 @@
 
 /* ===== CSS VARIABLES (Chess.com Color Scheme) ===== */
 :root {
-  --green: #739552;
-  --green-dark: #5a7a3f;
-  --green-light: #8fae6a;
-  --light: #EBECD0;
-  --dark: #312E2B;
-  --grey: #8B8987;
+  --blue: #4B7399;
+  --blue-dark: #375a7a;
+  --blue-light: #6a96c1;
+  --beige: #EBECD0;
+  --dark: #2c2a27;
+  --grey: #7c7a77;
   --white: #ffffff;
   color-scheme: dark;
 
-  /* UI Colors */
+  /* UI Colors Mapping */
+  --tile-dark: var(--blue);
+  --tile-light: var(--beige);
   --bg-main: #1a1816;
   --bg-panel: #272422;
-  --bg-card: #312E2B;
+  --bg-card: #2c2a27;
   --border: rgba(235, 236, 208, 0.1);
   --text-primary: #EBECD0;
   --text-secondary: #8B8987;
-  --text-accent: #739552;
+  --text-accent: var(--blue-light);
 
   /* Tile sizes (default for laptop) */
   --tile-size: 70px;
@@ -492,11 +494,11 @@ header {
 }
 
 .tile.light {
-  background-color: var(--light);
+  background-color: var(--tile-light);
 }
 
 .tile.dark-tile {
-  background-color: var(--green);
+  background-color: var(--tile-dark);
 }
 
 .tile:hover {
