@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45">
+  <!-- Dark Knight (horse head) -->
+  <g fill="#312E2B" stroke="#EBECD0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Base -->
+    <rect x="8" y="33" width="29" height="5" rx="2.5"/>
+    <!-- Body platform -->
+    <rect x="11" y="28" width="23" height="6" rx="2"/>
+    <!-- Horse head shape -->
+    <path d="M14 28 C14 28 12 22 15 16 C17 12 20 10 22 9 C25 8 28 9 30 11 C32 13 33 17 31 21 C30 23 28 27 27 28 Z"/>
+    <!-- Snout -->
+    <path d="M15 16 C13 17 11 20 12 24 C13 26 14 27 15 27" stroke-width="1.5"/>
+    <!-- Ear -->
+    <path d="M22 9 L23 6 L26 9" stroke-width="1.2"/>
+    <!-- Mane -->
+    <path d="M28 11 C30 14 30 18 29 21" stroke-width="1.2" fill="none" stroke="#739552"/>
+    <!-- Eye -->
+    <circle cx="27" cy="14" r="1.5" fill="#EBECD0" stroke="none"/>
+    <!-- Nostril -->
+    <circle cx="14" cy="23" r="1" fill="#8B8987" stroke="none"/>
+  </g>
+</svg>

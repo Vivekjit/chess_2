@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 45 45">
+  <!-- White King -->
+  <g fill="#EBECD0" stroke="#312E2B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Crown base -->
+    <rect x="9" y="32" width="27" height="5" rx="2"/>
+    <rect x="11" y="28" width="23" height="5" rx="1"/>
+    <!-- Body -->
+    <path d="M11 28 C11 18 15 14 22.5 14 C30 14 34 18 34 28 Z"/>
+    <!-- Crown top points -->
+    <path d="M20 14 L20 8 M22.5 12 L22.5 5 M25 14 L25 8" stroke-width="2"/>
+    <!-- Cross at top -->
+    <rect x="20.5" y="3" width="4" height="12" rx="1"/>
+    <rect x="17" y="7" width="11" height="4" rx="1"/>
+  </g>
+  <!-- Inner detail -->
+  <g fill="none" stroke="#739552" stroke-width="1">
+    <path d="M13 30 L32 30"/>
+    <path d="M14 26 L31 26"/>
+  </g>
+</svg>

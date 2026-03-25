@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chess 2 — The Double-Action Skirmish</title>
+  <meta name="description"
+    content="Chess 2 is a high-speed tactical variant on a 6×10 board where every piece gets two actions per turn. Play online with a friend or locally." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ===== START SCREEN ===== -->
+  <div class="start-screen" id="start-screen">
+    <div class="start-card">
+      <div class="start-logo">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="64" height="64" rx="14" fill="#312E2B" />
+          <rect x="8" y="8" width="22" height="22" rx="3" fill="#739552" />
+          <rect x="34" y="8" width="22" height="22" rx="3" fill="#EBECD0" />
+          <rect x="8" y="34" width="22" height="22" rx="3" fill="#EBECD0" />
+          <rect x="34" y="34" width="22" height="22" rx="3" fill="#739552" />
+          <text x="17" y="26" font-family="sans-serif" font-weight="900" font-size="14" fill="#EBECD0"
+            text-anchor="middle">♟</text>
+          <text x="45" y="26" font-family="sans-serif" font-weight="900" font-size="14" fill="#312E2B"
+            text-anchor="middle">♜</text>
+          <text x="17" y="52" font-family="sans-serif" font-weight="900" font-size="14" fill="#312E2B"
+            text-anchor="middle">♗</text>
+          <text x="45" y="52" font-family="sans-serif" font-weight="900" font-size="14" fill="#EBECD0"
+            text-anchor="middle">♞</text>
+        </svg>
+      </div>
+      <div class="start-title">CHESS 2</div>
+      <div class="start-subtitle">The Double-Action Skirmish</div>
+      <div class="start-mode-btns">
+        <div class="start-modes">
+          <button id="btn-local" class="btn-primary">
+            <i class="fas fa-users"></i> Play Local (Same Device)
+          </button>
+          <button id="btn-vs-ai" class="btn-primary" style="background: var(--chess-grey);">
+            <i class="fas fa-robot"></i> Play vs Computer
+          </button>
+        </div>
+        <div class="start-divider"></div>
+        <button class="btn btn-secondary" id="btn-create-room"
+          style="width:100%;padding:12px 20px;font-size:14px;margin-bottom:8px;">
+          🔗 Create Online Room
+        </button>
+        <div style="display:flex;gap:8px;">
+          <input class="room-input" id="join-room-input" placeholder="Enter Room Code" maxlength="6" />
+          <button class="btn btn-primary" id="btn-join-room" style="white-space:nowrap;padding:10px 14px;">Join</button>
+        </div>
+        <div id="start-status" style="font-size:12px;color:#739552;min-height:18px;margin-top:4px;"></div>
+      </div>
+      <div style="margin-top:24px;font-size:11px;color:#8B8987;text-align:center;">Design by Dodo · Chess 2</div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN APP ===== -->
+  <header>
+    <div class="header-logo">
+      <svg class="logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="8" fill="#312E2B" />
+        <rect x="4" y="4" width="13" height="13" rx="2" fill="#739552" />
+        <rect x="19" y="4" width="13" height="13" rx="2" fill="#EBECD0" />
+        <rect x="4" y="19" width="13" height="13" rx="2" fill="#EBECD0" />
+        <rect x="19" y="19" width="13" height="13" rx="2" fill="#739552" />
+      </svg>
+      <div>
+        <h1>CHESS 2</h1>
+        <span class="subtitle">Double-Action Skirmish</span>
+      </div>
+    </div>
+    <div class="header-nav">
+      <span id="header-room-badge" style="display:none;" class="mp-badge">
+        <span class="dot"></span>
+        Room: <span id="header-room-id" style="font-family:monospace;font-weight:700;letter-spacing:2px;"></span>
+      </span>
+      <button class="btn btn-ghost" id="btn-new-game">↺ New Game</button>
+    </div>
+  </header>
+
+  <div class="app-container">
+
+    <!-- LEFT PANEL -->
+    <div class="left-panel">
+      <!-- Rules Quick Ref -->
+      <div class="panel-card">
+        <div class="panel-card-title">Rules</div>
+        <div class="rule-item">
+          <span class="rule-icon">⚡</span>
+          <span><strong style="color:var(--text-primary)">Double Action:</strong> Every piece moves twice per
+            turn</span>
+        </div>
+        <div class="rule-item">
+          <span class="rule-icon">🏰</span>
+          <span><strong style="color:#f87171">Rook:</strong> Never moves backward</span>
+        </div>
+        <div class="rule-item">
+          <span class="rule-icon">👑</span>
+          <span><strong style="color:#facc15">Win:</strong> Capture the opponent's King</span>
+        </div>
+        <div class="rule-item">
+          <span class="rule-icon">♟</span>
+          <span><strong style="color:var(--text-primary)">Pawn:</strong> Promotes at rank 10 (W) or rank 1 (B)</span>
+        </div>
+      </div>
+
+      <!-- Captured by White -->
+      <div class="panel-card">
+        <div class="panel-card-title">⬜ Captured by White</div>
+        <div class="captured-row" id="captured-by-white"></div>
+      </div>
+
+      <!-- Captured by Dark -->
+      <div class="panel-card">
+        <div class="panel-card-title">⬛ Captured by Dark</div>
+        <div class="captured-row" id="captured-by-dark"></div>
+      </div>
+    </div>
+
+    <!-- BOARD AREA -->
+    <div class="board-area">
+      <div class="board-wrapper">
+        <!-- Action pips -->
+        <div class="action-indicator-bar">
+          <div class="action-pip" id="pip-1"></div>
+          <div class="action-pip" id="pip-2"></div>
+        </div>
+        <div class="board-with-coords">
+          <div class="rank-labels" id="rank-labels"></div>
+          <div>
+            <div id="chess-board"></div>
+            <div class="file-labels" id="file-labels"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="right-panel">
+      <!-- Turn Indicator -->
+      <div class="turn-indicator" id="turn-indicator">
+        <div class="turn-player">
+          <div class="turn-dot white" id="turn-dot"></div>
+          <span class="turn-name" id="turn-name">White</span>
+        </div>
+        <div class="action-badge" id="action-badge">Action 1 of 2</div>
+      </div>
+
+      <!-- Multiplayer status -->
+      <div id="mp-panel" style="display:none;" class="panel-card">
+        <div class="panel-card-title">Online</div>
+        <div class="mp-badge"><span class="dot"></span><span id="mp-status">Waiting for opponent…</span></div>
+        <div class="room-id-display" id="room-id-display">——</div>
+      </div>
+
+      <!-- Move Log -->
+      <div class="panel-card move-log">
+        <div class="panel-card-title">Move Log</div>
+        <div class="move-log-list" id="move-log-list">
+          <div style="color:var(--text-secondary);font-size:12px;padding:4px;">Game started. White to move.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STATUS FLASH ===== -->
+  <div class="status-flash" id="status-flash"></div>
+
+  <!-- ===== PROMOTION MODAL ===== -->
+  <div class="modal-overlay" id="promotion-modal">
+    <div class="modal">
+      <div class="modal-title">♟ Promote Pawn</div>
+      <div class="modal-sub">Choose your new piece</div>
+      <div class="modal-pieces" id="promotion-choices"></div>
+    </div>
+  </div>
+
+  <!-- ===== GAME OVER MODAL ===== -->
+  <div class="modal-overlay" id="gameover-modal">
+    <div class="modal">
+      <div class="gameover-trophy">🏆</div>
+      <div class="gameover-title" id="gameover-title">White Wins!</div>
+      <div class="gameover-sub" id="gameover-sub">The King has been captured.</div>
+      <button class="btn btn-primary" id="btn-play-again" style="width:100%;padding:14px;font-size:15px;">Play
+        Again</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+</body>
+
+</html>
