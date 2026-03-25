@@ -9,6 +9,7 @@
   --dark: #312E2B;
   --grey: #8B8987;
   --white: #ffffff;
+  color-scheme: dark;
 
   /* UI Colors */
   --bg-main: #1a1816;
@@ -475,6 +476,7 @@ header {
     0 20px 60px rgba(0, 0, 0, 0.6),
     0 0 40px rgba(115, 149, 82, 0.08);
   overflow: hidden;
+  forced-color-adjust: none;
 }
 
 /* ===== TILES ===== */
@@ -610,7 +612,8 @@ header {
   z-index: 3;
   pointer-events: none;
   transition: transform 0.1s ease;
-  filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.5));
+  forced-color-adjust: none;
 }
 
 .tile:hover .piece-img {
