@@ -236,8 +236,8 @@ function computeDoubleMoves(boardState, fromRow, fromCol) {
             const isCapture = !!(a1Captured || a2Captured);
             const key = `${a2.row},${a2.col}`;
 
-            // Rebound allowed ONLY if something was captured (meaningful change)
-            if (a2.row === fromRow && a2.col === fromCol && !isCapture) continue;
+            // Rebound never allowed (net movement required)
+            if (a2.row === fromRow && a2.col === fromCol) continue;
 
             if (!destMap.has(key)) {
                 destMap.set(key, {
@@ -438,7 +438,7 @@ function computeSegmentedMoves(row, col) {
     for (const s1 of step1) {
         const boardAfterA1 = applyMoveToBoard(board, row, col, s1.row, s1.col);
         const s2List = singleMoves(boardAfterA1, s1.row, s1.col)
-            .filter(m => !(m.row === row && m.col === col && !boardAfterA1[m.row][m.col])) // Rebound only if capture
+            .filter(m => !(m.row === row && m.col === col)) // Rebound never allowed
             .map(m => ({
                 ...m, isCapture: !!boardAfterA1[m.row][m.col]
             }));
