@@ -30,7 +30,7 @@ function startTimer(roomId) {
 
     if (room.clocks[room.activeColor] <= 0) {
       clearInterval(room.interval);
-      io.to(roomId).emit('timeout', { winner: room.activeColor === 'white' ? 'dark' : 'white' });
+      io.to(roomId).emit('timeout', { winner: 'draw' });
     }
   }, 1000);
 }

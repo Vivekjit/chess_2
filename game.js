@@ -56,6 +56,8 @@ let socket = null;
 let myColor = null;
 let roomId = null;
 let isOnline = false;
+let gameClocks = { white: 300, dark: 300 };
+let timerInterval = null;
 
 // QoL features
 let playerViewColor = COLORS.WHITE; // Board orientation preference
@@ -588,6 +590,33 @@ function finalizeTurn(notation) {
     if (isVsAI && currentPlayer === aiPlayerColor && !gameOver) {
         setTimeout(makeAIMove, 600);
     }
+    if (!isOnline) startLocalTimer();
+}
+
+function startLocalTimer() {
+    stopLocalTimer();
+    timerInterval = setInterval(() => {
+        if (gameOver) { stopLocalTimer(); return; }
+        gameClocks[currentPlayer]--;
+        updateTimerUI(gameClocks, currentPlayer);
+        if (gameClocks[currentPlayer] <= 0) {
+            stopLocalTimer();
+            triggerGameOver('draw');
+            showFlash("Time Out! Game Drawn.");
+        }
+    }, 1000);
+}
+
+function stopLocalTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+}
+
+function updateTimerUI(clocks, activeColor) {
+    const s = clocks[activeColor];
+    if (s === undefined) return;
+    const m = Math.floor(Math.max(0, s) / 60);
+    const sc = Math.max(0, s) % 60;
+    $('game-clock').textContent = `${m.toString().padStart(2, '0')}:${sc.toString().padStart(2, '0')}`;
 }
 
 // ===== MOVE LOG =====
@@ -662,8 +691,16 @@ function checkWin(b) {
 
 function triggerGameOver(winner) {
     gameOver = true;
-    const wName = winner === COLORS.WHITE ? 'White' : 'Dark';
-    $('gameover-title').textContent = `${wName} Wins! 🏆`;
+    stopLocalTimer();
+    const title = $('gameover-title');
+    if (winner === 'draw') {
+        title.textContent = "Game Drawn! ⚖️";
+        $('gameover-sub').textContent = "Time has run out for the current player.";
+    } else {
+        const wName = winner === COLORS.WHITE ? 'White' : 'Dark';
+        title.textContent = `${wName} Wins! 🏆`;
+        $('gameover-sub').textContent = "The King has been captured.";
+    }
     $('gameover-modal').classList.add('active');
     renderBoard();
 }
@@ -808,7 +845,10 @@ function initSocket() {
         syncLobbyUI(rid, color);
     });
     socket.on('receive_state', s => { board = s.board; currentPlayer = s.currentPlayer; turnNumber = s.turnNumber; moveLog = s.moveLog; lastMoveHighlights = s.lastMoveHighlights; capturedByWhite = s.capturedByWhite; capturedByDark = s.capturedByDark; renderBoard(); rebuildLogUI(); });
-    socket.on('timer_update', ({ clocks, activeColor }) => { const s = clocks[activeColor]; const m = Math.floor(s / 60); const sc = s % 60; $('game-clock').textContent = `${m.toString().padStart(2, '0')}:${sc.toString().padStart(2, '0')}`; });
+    socket.on('timer_update', ({ clocks, activeColor }) => {
+        gameClocks = clocks;
+        updateTimerUI(clocks, activeColor);
+    });
     socket.on('timeout', ({ winner }) => { triggerGameOver(winner); showFlash("Time Out!"); });
     socket.on('opponent_disconnected', () => { showFlash("Opponent Disconnected", 5000); });
 }
@@ -872,6 +912,10 @@ function startGame(color) {
     board = createInitialBoard();
     currentPlayer = COLORS.WHITE;
     gameOver = false;
+    gameClocks = { white: 300, dark: 300 };
+    updateTimerUI(gameClocks, COLORS.WHITE);
+    if (!isOnline) startLocalTimer();
+
     moveLog = []; capturedByWhite = []; capturedByDark = []; lastMoveHighlights = []; moveHistory = [];
     turnNumber = 1;
 
