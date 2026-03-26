@@ -103,6 +103,7 @@ io.on('connection', (socket) => {
     const room = rooms[roomId];
     if (room) {
       room.activeColor = state.currentPlayer;
+      room.clocks = { white: 300, dark: 300 }; // Reset for each move
       socket.to(roomId).emit('receive_state', state);
     }
   });

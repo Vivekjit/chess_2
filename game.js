@@ -585,6 +585,9 @@ function finalizeTurn(notation) {
     if (winner) { triggerGameOver(winner); return; }
 
     currentPlayer = (currentPlayer === COLORS.WHITE) ? COLORS.DARK : COLORS.WHITE;
+    gameClocks = { white: 300, dark: 300 }; // Shot clock reset
+    updateTimerUI(gameClocks, currentPlayer);
+
     if (isOnline && socket) syncState();
 
     if (isVsAI && currentPlayer === aiPlayerColor && !gameOver) {
