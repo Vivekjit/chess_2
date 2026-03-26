@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '.')));
 
 // Rooms: { roomId: { players: [socket.id, socket.id], clocks: { white: 300, dark: 300 }, activeColor: 'white', interval: null } }
 const rooms = {};

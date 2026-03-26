@@ -11,7 +11,14 @@
   --white: #ffffff;
   color-scheme: dark;
 
-  /* UI Colors Mapping */
+  /* Brand Colors (Updated to Blue/Beige) */
+  --blue: #4B7399;
+  --blue-dark: #375a7a;
+  --blue-light: #6a96c1;
+  --beige: #EBECD0;
+  --orange: #F38D1F;
+  --green-accent: #779556;
+
   --tile-dark: var(--blue);
   --tile-light: var(--beige);
   --bg-main: #1a1816;
@@ -22,7 +29,6 @@
   --text-secondary: #8B8987;
   --text-accent: var(--blue-light);
 
-  /* Tile sizes (default for laptop) */
   --tile-size: 70px;
   --board-border: 6px;
 }
@@ -91,7 +97,7 @@ header {
 .header-logo h1 {
   font-size: 22px;
   font-weight: 800;
-  color: var(--green);
+  color: var(--blue-light);
   letter-spacing: -0.5px;
 }
 
@@ -156,6 +162,38 @@ header {
 .btn-ghost:hover {
   color: var(--text-primary);
   border-color: var(--border);
+}
+
+/* Header action buttons (Undo + New Game) */
+.header-action-btn {
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  transition: all 0.18s ease;
+}
+
+.header-action-btn:hover {
+  background: var(--blue-dark);
+  border-color: var(--blue-light);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(75, 115, 153, 0.3);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+  .header-action-btn {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+
+  /* Hide subtitle on tiny screens */
+  .header-logo .subtitle {
+    display: none;
+  }
 }
 
 /* ===== MAIN LAYOUT ===== */
@@ -505,95 +543,93 @@ header {
   filter: brightness(1.08);
 }
 
-/* SELECTED tile */
+/* ===== PIECE HIGHLIGHTING (PHASE 3: CIRCULAR INSET) ===== */
 .tile.selected {
-  background-color: #f6f669 !important;
-  filter: none;
+  box-shadow: inset 0 0 0 4px var(--blue-light);
 }
 
-.tile.selected::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(246, 246, 105, 0.35);
+/* Intermediate position (after Action 1, before Action 2) */
+.tile.step1-pos {
+  box-shadow: inset 0 0 0 3px var(--orange);
+  animation: step1-pulse 0.8s ease-in-out infinite;
 }
 
-/* ===== BLUE AURA — reachable move destination ===== */
-.tile.avail-move {
-  position: relative;
-}
-
-.tile.avail-move::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 2px;
-  box-shadow:
-    inset 0 0 0 3px rgba(59, 130, 246, 0.85),
-    0 0 12px 4px rgba(59, 130, 246, 0.45);
-  z-index: 4;
-  pointer-events: none;
-  animation: blue-pulse 1.6s ease-in-out infinite;
-}
-
-.tile.avail-move::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(59, 130, 246, 0.12);
-  z-index: 3;
-  pointer-events: none;
-}
-
-@keyframes blue-pulse {
+@keyframes step1-pulse {
 
   0%,
   100% {
-    box-shadow: inset 0 0 0 3px rgba(59, 130, 246, 0.85), 0 0 12px 4px rgba(59, 130, 246, 0.45);
+    box-shadow: inset 0 0 0 3px var(--orange), 0 0 0 0 rgba(243, 141, 31, 0);
   }
 
   50% {
-    box-shadow: inset 0 0 0 3px rgba(59, 130, 246, 0.5), 0 0 20px 8px rgba(59, 130, 246, 0.25);
+    box-shadow: inset 0 0 0 3px var(--orange), 0 0 8px 2px rgba(243, 141, 31, 0.45);
   }
 }
 
-/* ===== GREEN AURA — reachable capture destination ===== */
-.tile.avail-capture {
-  position: relative;
-}
-
-.tile.avail-capture::after {
+.tile.avail-1::after,
+.tile.avail-2::after,
+.tile.avail-cap::after {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 2px;
-  box-shadow:
-    inset 0 0 0 3px rgba(34, 197, 94, 0.9),
-    0 0 14px 5px rgba(34, 197, 94, 0.5);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
   z-index: 4;
   pointer-events: none;
-  animation: green-pulse 1.4s ease-in-out infinite;
 }
 
-.tile.avail-capture::before {
-  content: '';
+/* Action 1 (Blue Aura) */
+.tile.avail-1::after {
+  width: 28%;
+  height: 28%;
+  background: var(--blue-light);
+  box-shadow: 0 0 15px var(--blue-light);
+  opacity: 0.9;
+}
+
+/* Action 2 (Orange Aura) */
+.tile.avail-2::after {
+  width: 25%;
+  height: 25%;
+  background: var(--orange);
+  box-shadow: 0 0 12px var(--orange);
+  opacity: 0.8;
+}
+
+/* Captures (Green Aura) */
+.tile.avail-cap::after {
+  width: 38%;
+  height: 38%;
+  border: 4px solid var(--green-accent);
+  background: rgba(119, 149, 82, 0.2);
+  box-shadow: 0 0 10px var(--green-accent);
+}
+
+.unselect-btn {
   position: absolute;
-  inset: 0;
-  background: rgba(34, 197, 94, 0.14);
-  z-index: 3;
-  pointer-events: none;
+  top: -42px;
+  right: 0;
+  background: var(--blue-dark);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: none;
+  z-index: 10;
+  border: 1px solid var(--blue-light);
+  transition: all 0.2s;
 }
 
-@keyframes green-pulse {
+.unselect-btn.active {
+  display: block;
+}
 
-  0%,
-  100% {
-    box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.9), 0 0 14px 5px rgba(34, 197, 94, 0.5);
-  }
-
-  50% {
-    box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.55), 0 0 22px 9px rgba(34, 197, 94, 0.25);
-  }
+.unselect-btn:hover {
+  background: var(--blue);
+  transform: translateY(-1px);
 }
 
 /* LAST MOVE highlights */

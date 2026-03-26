@@ -39,6 +39,17 @@ let pendingPromotion = null;    // { row, col, color, path, fromRow, fromCol }
 // AI state
 let isVsAI = false;
 let aiThinking = false;
+let aiPlayerColor = COLORS.DARK; // Default AI is Dark
+
+// Phase 3: Segmented Move State
+let segmentedMoveState = {
+    active: false,
+    fromCell: null,      // {row, col}
+    step1Cell: null,     // {row, col} after first action
+    availableStep1: [],  // list of first actions
+    availableStep2: [],  // list of second actions from step1Cell
+    step2Map: null
+};
 
 // Multiplayer
 let socket = null;
@@ -279,6 +290,14 @@ function renderBoard() {
     const boardEl = $('chess-board');
     boardEl.innerHTML = '';
 
+    // Unselect button visibility
+    const unselectBtn = $('unselect-btn');
+    if (segmentedMoveState.active) {
+        unselectBtn.classList.add('active');
+    } else {
+        unselectBtn.classList.remove('active');
+    }
+
     // Determine rendering order based on playerViewColor
     const rows = [];
     if (playerViewColor === COLORS.WHITE) {
@@ -294,10 +313,6 @@ function renderBoard() {
         for (let c = COLS - 1; c >= 0; c--) cols.push(c);
     }
 
-    // Visual display: outer loop handles vertical stack
-    // We want the player's 'home' rank at the bottom.
-    // If White: Row 9 at top, Row 0 at bottom.
-    // If Dark: Row 0 at top, Row 9 at bottom.
     const displayRows = [...rows].reverse();
 
     displayRows.forEach(row => {
@@ -308,10 +323,35 @@ function renderBoard() {
             tile.dataset.col = col;
 
             if (lastMoveHighlights.some(h => h.row === row && h.col === col)) tile.classList.add('last-move');
-            if (selectedCell && selectedCell.row === row && selectedCell.col === col) tile.classList.add('selected');
 
-            const avail = availableMoves.find(m => m.row === row && m.col === col);
-            if (avail) tile.classList.add(avail.isCapture ? 'avail-capture' : 'avail-move');
+            // Selected piece being moved
+            if (segmentedMoveState.active && segmentedMoveState.fromCell &&
+                segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
+                tile.classList.add('selected');
+            }
+
+            // Highlight step1Cell (piece's intermediate position after Action 1)
+            if (segmentedMoveState.active && segmentedMoveState.step1Cell &&
+                segmentedMoveState.step1Cell.row === row && segmentedMoveState.step1Cell.col === col) {
+                tile.classList.add('step1-pos');
+            }
+
+            // Segmented Highlighting (Phase 3)
+            if (segmentedMoveState.active) {
+                if (!segmentedMoveState.step1Cell) {
+                    // Show Step 1 options (Blue)
+                    const m = segmentedMoveState.availableStep1.find(x => x.row === row && x.col === col);
+                    if (m) {
+                        tile.classList.add(m.isCapture ? 'avail-cap' : 'avail-1');
+                    }
+                } else {
+                    // Show Step 2 options from step1Cell (Orange)
+                    const m = segmentedMoveState.availableStep2.find(x => x.row === row && x.col === col);
+                    if (m) {
+                        tile.classList.add(m.isCapture ? 'avail-cap' : 'avail-2');
+                    }
+                }
+            }
 
             const piece = board[row][col];
             if (piece) {
@@ -319,10 +359,21 @@ function renderBoard() {
                 img.className = 'piece-img';
                 img.src = `pieces/${piece.color}-${pieceName(piece.type).toLowerCase()}.svg`;
                 img.alt = `${piece.color} ${pieceName(piece.type)}`;
+
+                // DRAG AND DROP
+                if (piece.color === currentPlayer && !gameOver && (!isOnline || currentPlayer === myColor)) {
+                    img.draggable = true;
+                    img.addEventListener('dragstart', (e) => handleDragStart(e, row, col));
+                }
+
                 tile.appendChild(img);
             }
 
-            tile.addEventListener('click', handleTileClick);
+            // Tile Events
+            tile.addEventListener('dragover', handleDragOver);
+            tile.addEventListener('drop', (e) => handleDrop(e, row, col));
+            tile.addEventListener('click', () => handleTileClick(row, col));
+
             boardEl.appendChild(tile);
         });
     });
@@ -370,194 +421,283 @@ function updateUI() {
     $('turn-dot').className = `turn-dot ${currentPlayer}`;
     $('turn-name').textContent = isDark ? 'Dark' : 'White';
 
-    // Hide the action-phase badge (no longer relevant in UI)
     const badge = $('action-badge');
     badge.textContent = 'Select a piece';
     badge.className = 'action-badge';
-
-    // Pips — always show "both" since move is pre-computed
-    $('pip-1').className = 'action-pip active';
-    $('pip-2').className = 'action-pip active';
-
-    renderCaptured();
 }
 
-function renderCaptured() {
-    const r = (arr, id) => {
-        const el = $(id);
-        el.innerHTML = '';
-        arr.forEach(p => {
-            const img = document.createElement('img');
-            img.className = 'captured-piece-icon';
-            img.src = `pieces/${p.color}-${pieceName(p.type).toLowerCase()}.svg`;
-            img.title = `${p.color} ${pieceName(p.type)}`;
-            el.appendChild(img);
-        });
-    };
-    r(capturedByWhite, 'captured-by-white');
-    r(capturedByDark, 'captured-by-dark');
+// ===== PIECE HIGHLIGHTING (PHASE 3: SEGMENTED) =====
+function computeSegmentedMoves(row, col) {
+    const fromPiece = board[row][col];
+    if (!fromPiece) return { step1: [], step2Map: new Map() };
+
+    // Get all possible Action 1 destinations
+    const step1 = singleMoves(board, row, col).map(m => ({
+        ...m, isCapture: !!board[m.row][m.col]
+    }));
+
+    const step2Map = new Map();
+    for (const s1 of step1) {
+        const boardAfterA1 = applyMoveToBoard(board, row, col, s1.row, s1.col);
+        const s2List = singleMoves(boardAfterA1, s1.row, s1.col)
+            .filter(m => !(m.row === row && m.col === col && !boardAfterA1[m.row][m.col])) // Rebound only if capture
+            .map(m => ({
+                ...m, isCapture: !!boardAfterA1[m.row][m.col]
+            }));
+        step2Map.set(`${s1.row},${s1.col}`, s2List);
+    }
+    return { step1, step2Map };
 }
 
-// ===== CLICK HANDLER =====
-function handleTileClick(e) {
-    if (gameOver || pendingPromotion) return;
+function unselectPiece() {
+    segmentedMoveState.active = false;
+    segmentedMoveState.fromCell = null;
+    segmentedMoveState.step1Cell = null;
+    segmentedMoveState.availableStep1 = [];
+    segmentedMoveState.availableStep2 = [];
+    selectedCell = null;
+    renderBoard();
+}
 
-    const tile = e.currentTarget;
-    const row = parseInt(tile.dataset.row);
-    const col = parseInt(tile.dataset.col);
+// Global click/DND entry point
+function handleTileClick(row, col) {
+    if (gameOver || aiThinking || pendingPromotion) return;
+    if (isOnline && currentPlayer !== myColor) return;
 
-    if (isOnline && myColor && currentPlayer !== myColor) {
-        showFlash("It's your opponent's turn.");
-        return;
+    // Direct coords from event
+    if (typeof row === 'object') {
+        const t = row.currentTarget;
+        row = parseInt(t.dataset.row);
+        col = parseInt(t.dataset.col);
     }
 
     const piece = board[row][col];
 
-    if (selectedCell) {
-        // Is it a valid destination?
-        const dest = availableMoves.find(m => m.row === row && m.col === col);
-        if (dest) {
-            executeTurn(selectedCell.row, selectedCell.col, dest);
-            return;
-        }
-        // Re-select own piece
-        if (piece && piece.color === currentPlayer) {
-            selectPiece(row, col);
-            return;
-        }
-        // Deselect
-        deselect();
-        return;
-    }
-
-    // Select own piece
+    // Case 1: Start/Re-select current player's piece
     if (piece && piece.color === currentPlayer) {
-        selectPiece(row, col);
-    }
-}
-
-function selectPiece(row, col) {
-    selectedCell = { row, col };
-    availableMoves = computeDoubleMoves(board, row, col);
-    renderBoard();
-
-    if (availableMoves.length === 0) {
-        showFlash('This piece has no double-move destinations.');
-    }
-}
-
-function deselect() {
-    selectedCell = null;
-    availableMoves = [];
-    renderBoard();
-}
-
-// ===== EXECUTE A FULL DOUBLE-MOVE TURN =====
-/**
- * Apply both sub-moves of the double action in sequence.
- * dest.path = { via, a1Captured, a2Captured }
- */
-function executeTurn(fromRow, fromCol, dest) {
-    const { row: toRow, col: toCol, path } = dest;
-    const { via, a1Captured, a2Captured } = path;
-    const movingPiece = board[fromRow][fromCol];
-
-    // Tracker for captured pieces
-    const logCaptures = (cap) => {
-        if (!cap) return;
-        if (currentPlayer === COLORS.WHITE) capturedByWhite.push(cap);
-        else capturedByDark.push(cap);
-    };
-
-    // Action 1: apply first step
-    logCaptures(a1Captured);
-    board = applyMoveToBoard(board, fromRow, fromCol, via.row, via.col);
-
-    // Notation building
-    const capMid = a1Captured ? `x${cellName(via.row, via.col)}` : `-${cellName(via.row, via.col)}`;
-    const capFinal = a2Captured ? `x${cellName(toRow, toCol)}` : `-${cellName(toRow, toCol)}`;
-    const notation = `${movingPiece.type}${cellName(fromRow, fromCol)}${capMid}${capFinal}`;
-
-    // Mid-move Promotion check
-    if (movingPiece.type === PIECES.PAWN && needsPromotion(via.row, movingPiece.color)) {
-        pendingPromotion = {
-            row: toRow, col: toCol, color: movingPiece.color,
-            notation,
-            midStep: true,
-            via: { row: via.row, col: via.col }, // where it is now
-            final: { row: toRow, col: toCol, cap: a2Captured }
-        };
-        deselect();
-        showPromotionModal();
+        if (segmentedMoveState.active && segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
+            unselectPiece();
+            return;
+        }
+        const { step1, step2Map } = computeSegmentedMoves(row, col);
+        segmentedMoveState.active = true;
+        segmentedMoveState.fromCell = { row, col };
+        segmentedMoveState.step1Cell = null;
+        segmentedMoveState.availableStep1 = step1;
+        segmentedMoveState.step2Map = step2Map;
+        segmentedMoveState.availableStep2 = [];
+        renderBoard();
         return;
     }
 
-    // Action 2: apply second step
-    logCaptures(a2Captured);
-    board = applyMoveToBoard(board, via.row, via.col, toRow, toCol);
-
-    // Highlights
-    lastMoveHighlights = [{ row: fromRow, col: fromCol }, { row: via.row, col: via.col }, { row: toRow, col: toCol }];
-
-    // Final Promotion check
-    if (movingPiece.type === PIECES.PAWN && needsPromotion(toRow, movingPiece.color)) {
-        pendingPromotion = { row: toRow, col: toCol, color: movingPiece.color, notation };
-        deselect();
-        showPromotionModal();
-        return;
-    }
-
-    finalizeTurn(notation);
-}
-
-function finalizeTurn(notation) {
-    saveToHistory();
-    logMove(notation);
-    const winner = checkWin(board);
-    if (winner) { triggerGameOver(winner); return; }
-    switchPlayer();
-
-    // Trigger AI if it's AI turn
-    if (isVsAI && currentPlayer === COLORS.DARK && !gameOver) {
-        setTimeout(makeAIMove, 600);
+    // Case 2: Executing Move
+    if (segmentedMoveState.active) {
+        if (!segmentedMoveState.step1Cell) {
+            // Picking Action 1 (Blue/Green)
+            const m1 = segmentedMoveState.availableStep1.find(x => x.row === row && x.col === col);
+            if (m1) {
+                segmentedMoveState.step1Cell = { row, col };
+                segmentedMoveState.availableStep2 = segmentedMoveState.step2Map.get(`${row},${col}`) || [];
+                renderBoard();
+            } else {
+                unselectPiece();
+            }
+        } else {
+            // Picking Action 2 (Orange/Green - COMMIT)
+            const m2 = segmentedMoveState.availableStep2.find(x => x.row === row && x.col === col);
+            if (m2) {
+                executeSegmentedMove(segmentedMoveState.fromCell, segmentedMoveState.step1Cell, { row, col });
+            } else {
+                unselectPiece();
+            }
+        }
     }
 }
 
-function saveToHistory() {
-    const snap = {
-        board: JSON.parse(JSON.stringify(board)),
+// ===== UNDO / HISTORY =====
+function pushToHistory() {
+    moveHistory.push({
+        board: board.map(r => r.map(c => c ? { ...c } : null)),
         currentPlayer,
-        turnNumber,
-        gameOver,
-        lastMoveHighlights: [...lastMoveHighlights],
         capturedByWhite: [...capturedByWhite],
         capturedByDark: [...capturedByDark],
-        moveLog: JSON.parse(JSON.stringify(moveLog))
-    };
-    moveHistory.push(snap);
+        moveLog: JSON.parse(JSON.stringify(moveLog)),
+        turnNumber,
+        lastMoveHighlights: [...lastMoveHighlights],
+        moveLogHTML: $('move-log-list').innerHTML
+    });
 }
 
 function undoMove() {
-    if (moveHistory.length === 0) return;
-    const last = moveHistory.pop();
-    board = last.board;
-    currentPlayer = last.currentPlayer;
-    actionPhase = last.actionPhase;
-    turnNumber = last.turnNumber;
-    gameOver = last.gameOver;
-    lastMoveHighlights = last.lastMoveHighlights;
-
-    selectedCell = null; availableMoves = [];
+    if (moveHistory.length === 0) { showFlash('Nothing to undo'); return; }
+    const s = moveHistory.pop();
+    board = s.board;
+    currentPlayer = s.currentPlayer;
+    capturedByWhite = s.capturedByWhite;
+    capturedByDark = s.capturedByDark;
+    moveLog = s.moveLog;
+    turnNumber = s.turnNumber;
+    lastMoveHighlights = s.lastMoveHighlights;
+    $('move-log-list').innerHTML = s.moveLogHTML;
+    gameOver = false;
+    pendingPromotion = null;
+    aiThinking = false;
+    unselectPiece();
     renderBoard();
-    updateUI();
-
-    // Remove last entry from visual log (simplification)
-    const list = $('move-log-list');
-    if (list.lastChild && list.children.length > 1) list.removeChild(list.lastChild);
-
-    showFlash("Turn Undone", 1000);
+    showFlash('Move undone ↩');
 }
 
+// ===== DRAG & DROP (Desktop HTML5 DnD) =====
+function handleDragStart(e, row, col) {
+    if (gameOver || aiThinking || (isOnline && currentPlayer !== myColor)) {
+        e.preventDefault(); return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+
+    // If step1 is already chosen and user is dragging the SAME piece (at fromCell),
+    // flag this as an Action 2 drag so the drop knows to complete the move.
+    if (segmentedMoveState.active && segmentedMoveState.step1Cell &&
+        segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
+        e.dataTransfer.setData('text/plain', JSON.stringify({ row, col, isDragAction2: true }));
+        return;
+    }
+
+    // Action 1 drag: select piece and show blue auras
+    e.dataTransfer.setData('text/plain', JSON.stringify({ row, col }));
+    if (!segmentedMoveState.active ||
+        segmentedMoveState.fromCell.row !== row ||
+        segmentedMoveState.fromCell.col !== col) {
+        handleTileClick(row, col);
+    }
+}
+
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+
+function handleDrop(e, tr, tc) {
+    e.preventDefault();
+    document.querySelectorAll('.tile.drag-over').forEach(t => t.classList.remove('drag-over'));
+    if (!segmentedMoveState.active) return;
+
+    let isDragAction2 = false;
+    try { isDragAction2 = JSON.parse(e.dataTransfer.getData('text/plain')).isDragAction2 || false; } catch (_) { }
+
+    if (isDragAction2 && segmentedMoveState.step1Cell) {
+        const m2 = segmentedMoveState.availableStep2.find(x => x.row === tr && x.col === tc);
+        if (m2) executeSegmentedMove(segmentedMoveState.fromCell, segmentedMoveState.step1Cell, { row: tr, col: tc });
+    } else {
+        handleTileClick(tr, tc);
+    }
+}
+
+// ===== TOUCH DRAG (Mobile) =====
+let _touch = null; // { row, col, ghost, startX, startY }
+
+function initTouchDrag() {
+    const board = $('chess-board');
+    board.addEventListener('touchstart', e => {
+        const tile = e.target.closest('.tile');
+        if (!tile) return;
+        const row = +tile.dataset.row, col = +tile.dataset.col;
+        const piece = window._gameBoard ? window._gameBoard[row][col] : null; // expose via window below
+        // Only drag current player's own piece
+        const actualPiece = board.querySelector(`[data-row="${row}"][data-col="${col}"] .piece-img`);
+        if (!actualPiece) return;
+        if (gameOver || aiThinking || (isOnline && currentPlayer !== myColor)) return;
+
+        e.preventDefault();
+        const touch = e.touches[0];
+
+        // Select the piece (shows auras)
+        if (segmentedMoveState.active && segmentedMoveState.step1Cell &&
+            segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
+            // mid-move Action 2 drag — keep selection
+        } else {
+            handleTileClick(row, col);
+        }
+
+        // Create ghost
+        const ghost = actualPiece.cloneNode(true);
+        ghost.style.cssText = `position:fixed;width:64px;height:64px;opacity:0.8;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:none;`;
+        ghost.style.left = touch.clientX + 'px';
+        ghost.style.top = touch.clientY + 'px';
+        document.body.appendChild(ghost);
+
+        _touch = {
+            row, col, ghost,
+            isDragAction2: !!(segmentedMoveState.active && segmentedMoveState.step1Cell &&
+                segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col)
+        };
+    }, { passive: false });
+
+    board.addEventListener('touchmove', e => {
+        if (!_touch) return;
+        e.preventDefault();
+        const t = e.touches[0];
+        _touch.ghost.style.left = t.clientX + 'px';
+        _touch.ghost.style.top = t.clientY + 'px';
+    }, { passive: false });
+
+    board.addEventListener('touchend', e => {
+        if (!_touch) return;
+        const t = e.changedTouches[0];
+        _touch.ghost.remove();
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        const tile = el ? el.closest('.tile') : null;
+        if (tile && segmentedMoveState.active) {
+            const tr = +tile.dataset.row, tc = +tile.dataset.col;
+            if (_touch.isDragAction2 && segmentedMoveState.step1Cell) {
+                const m2 = segmentedMoveState.availableStep2.find(x => x.row === tr && x.col === tc);
+                if (m2) executeSegmentedMove(segmentedMoveState.fromCell, segmentedMoveState.step1Cell, { row: tr, col: tc });
+            } else {
+                handleTileClick(tr, tc);
+            }
+        }
+        _touch = null;
+    });
+}
+
+
+// Final execution of double-move
+function executeSegmentedMove(from, via, to) {
+    pushToHistory();
+    const p = { ...board[from.row][from.col] };
+    const a1Captured = board[via.row][via.col];
+    const boardStep1 = applyMoveToBoard(board, from.row, from.col, via.row, via.col);
+    const a2Captured = boardStep1[to.row][to.col];
+
+    board = applyMoveToBoard(boardStep1, via.row, via.col, to.row, to.col);
+
+    if (a1Captured) (currentPlayer === COLORS.WHITE ? capturedByWhite : capturedByDark).push(a1Captured);
+    if (a2Captured) (currentPlayer === COLORS.WHITE ? capturedByWhite : capturedByDark).push(a2Captured);
+
+    lastMoveHighlights = [{ ...from }, { ...to }];
+
+    // Notation
+    const midN = a1Captured ? `x${cellName(via.row, via.col)}` : `-${cellName(via.row, via.col)}`;
+    const finalN = a2Captured ? `x${cellName(to.row, to.col)}` : `-${cellName(to.row, to.col)}`;
+    const notation = `${p.type}${cellName(from.row, from.col)}${midN}${finalN}`;
+
+    if (p.type === PIECES.PAWN && needsPromotion(to.row, p.color)) {
+        pendingPromotion = { row: to.row, col: to.col, color: p.color, notation, via, a1Captured, a2Captured, fromRow: from.row, fromCol: from.col };
+        showPromotionModal();
+    } else {
+        finalizeTurn(notation);
+    }
+    unselectPiece();
+}
+
+function finalizeTurn(notation) {
+    logMove(notation);
+    const winner = checkWin(board);
+    if (winner) { triggerGameOver(winner); return; }
+
+    currentPlayer = (currentPlayer === COLORS.WHITE) ? COLORS.DARK : COLORS.WHITE;
+    if (isOnline && socket) syncState();
+
+    if (isVsAI && currentPlayer === aiPlayerColor && !gameOver) {
+        setTimeout(makeAIMove, 600);
+    }
+}
 
 // ===== MOVE LOG =====
 let turnNumber = 1;
@@ -588,14 +728,6 @@ function logMove(notation) {
     list.scrollTop = list.scrollHeight;
 }
 
-function switchPlayer() {
-    currentPlayer = (currentPlayer === COLORS.WHITE) ? COLORS.DARK : COLORS.WHITE;
-    selectedCell = null;
-    availableMoves = [];
-    renderBoard();
-    if (isOnline && socket) syncState();
-}
-
 // ===== PROMOTION =====
 function showPromotionModal() {
     const { color } = pendingPromotion;
@@ -615,132 +747,121 @@ function showPromotionModal() {
 
 function completePromotion(newType) {
     const p = pendingPromotion;
-    const { row, col, color, notation, midStep, via, final } = p;
-
-    if (midStep) {
-        // piece currently at p.via
-        board[via.row][via.col] = null;
-        // Move new piece to final destination
-        if (final.cap) {
-            if (color === COLORS.WHITE) capturedByWhite.push(final.cap);
-            else capturedByDark.push(final.cap);
-        }
-        board[final.row][final.col] = { type: newType, color };
-    } else {
-        board[row][col] = { type: newType, color };
-    }
-
+    board[p.row][p.col] = { type: newType, color: p.color };
     pendingPromotion = null;
     $('promotion-modal').classList.remove('active');
-    finalizeTurn(`${notation}=${newType}`);
+    finalizeTurn(`${p.notation}=${newType}`);
 }
 
-// ===== AI ALGORITHM (Minimax + Alpha-Beta) =====
-function evaluateBoard(testBoard) {
-    let score = 0;
-    const pieceValues = { K: 10000, R: 50, B: 35, N: 30, P: 10 };
-
+// ===== WIN CHECK =====
+function checkWin(b) {
+    let wK = false, dK = false;
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-            const p = testBoard[r][c];
-            if (!p) continue;
-
-            let val = pieceValues[p.type] || 0;
-
-            // Positional bonuses
-            if (p.type === PIECES.PAWN) {
-                // Closer to promotion is better
-                const distToPromo = (p.color === COLORS.WHITE) ? (ROWS - 1 - r) : r;
-                val += (9 - distToPromo) * 2;
+            if (b[r][c]?.type === PIECES.KING) {
+                if (b[r][c].color === COLORS.WHITE) wK = true;
+                else dK = true;
             }
-
-            if (p.color === COLORS.DARK) score += val;
-            else score -= val;
         }
     }
-    return score;
+    if (!wK) return COLORS.DARK;
+    if (!dK) return COLORS.WHITE;
+    return null;
 }
 
-function updateClockUI(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    const el = $('game-clock');
-    if (el) el.textContent = timeStr;
+function triggerGameOver(winner) {
+    gameOver = true;
+    const wName = winner === COLORS.WHITE ? 'White' : 'Dark';
+    $('gameover-title').textContent = `${wName} Wins! 🏆`;
+    $('gameover-modal').classList.add('active');
+    renderBoard();
 }
 
+// ===== UNDO =====
+function pushToHistory() {
+    moveHistory.push({
+        board: JSON.parse(JSON.stringify(board)),
+        currentPlayer, turnNumber, moveLog: JSON.parse(JSON.stringify(moveLog)), lastMoveHighlights: [...lastMoveHighlights],
+        capturedByWhite: [...capturedByWhite], capturedByDark: [...capturedByDark]
+    });
+}
+
+function undoMove() {
+    if (moveHistory.length === 0 || aiThinking) return;
+    const prev = moveHistory.pop();
+    board = prev.board; currentPlayer = prev.currentPlayer; turnNumber = prev.turnNumber;
+    moveLog = prev.moveLog; lastMoveHighlights = prev.lastMoveHighlights;
+    capturedByWhite = prev.capturedByWhite; capturedByDark = prev.capturedByDark;
+
+    gameOver = false;
+    rebuildLogUI();
+    renderBoard();
+    showFlash("Turn Undone");
+}
+
+function rebuildLogUI() {
+    const list = $('move-log-list'); list.innerHTML = '';
+    moveLog.forEach(e => {
+        const div = document.createElement('div'); div.className = 'move-entry'; div.id = `move-row-${e.num}`;
+        div.innerHTML = `<span class="move-num">${e.num}.</span><span class="move-white">${e.white}</span><span class="move-dark">${e.dark}</span>`;
+        list.appendChild(div);
+    });
+}
+
+// ===== AI =====
 function makeAIMove() {
     if (gameOver || aiThinking) return;
     aiThinking = true;
-    showFlash("Computer is thinking...", 1000);
-
-    // Short delay to let UI update
+    showFlash("Computer is thinking...");
     setTimeout(() => {
-        const startTime = Date.now();
-        const best = getBestMove(board, 2); // Depth 2
+        const best = getBestMove(board, 2);
         aiThinking = false;
-
         if (best.move) {
-            executeTurn(best.from.row, best.from.col, best.move);
+            executeSegmentedMove(best.from, best.move.path.via, { row: best.move.row, col: best.move.col });
         } else {
-            console.log("AI has no legal moves?");
-            switchPlayer();
+            finalizeTurn("PASS");
         }
-    }, 100);
+    }, 600);
 }
 
 function getBestMove(currentBoard, depth) {
-    let bestScore = -Infinity;
-    let bestMove = null;
-    let bestFrom = null;
-
-    // Find all possible double-moves for all pieces
-    const allPieces = [];
+    let bestScore = -Infinity, bestMove = null, bestFrom = null;
+    const pieces = [];
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-            if (currentBoard[r][c]?.color === COLORS.DARK) {
-                allPieces.push({ r, c });
-            }
+            if (currentBoard[r][c]?.color === aiPlayerColor) pieces.push({ r, c });
         }
     }
-
-    // Shuffle pieces for variety
-    allPieces.sort(() => Math.random() - 0.5);
-
-    for (const p of allPieces) {
+    pieces.sort(() => Math.random() - 0.5);
+    for (const p of pieces) {
         const moves = computeDoubleMoves(currentBoard, p.r, p.c);
         for (const m of moves) {
-            const nextBoard = applyDoubleMove(currentBoard, p.r, p.c, m);
-            const score = minimax(nextBoard, depth - 1, -Infinity, Infinity, false);
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = m;
-                bestFrom = { row: p.r, col: p.c };
-            }
+            let next = applyMoveToBoard(currentBoard, p.r, p.c, m.path.via.row, m.path.via.col);
+            next = applyMoveToBoard(next, m.path.via.row, m.path.via.col, m.row, m.col);
+            const score = minimax(next, depth - 1, -Infinity, Infinity, false);
+            if (score > bestScore) { bestScore = score; bestMove = m; bestFrom = { row: p.r, col: p.c }; }
         }
     }
-
     return { from: bestFrom, move: bestMove };
 }
 
 function minimax(testBoard, depth, alpha, beta, isMaximizing) {
     const winner = checkWin(testBoard);
-    if (winner === COLORS.DARK) return 10000 + depth;
-    if (winner === COLORS.WHITE) return -10000 - depth;
+    if (winner === aiPlayerColor) return 10000 + depth;
+    if (winner && winner !== aiPlayerColor) return -10000 - depth;
     if (depth === 0) return evaluateBoard(testBoard);
 
     if (isMaximizing) {
         let maxEval = -Infinity;
-        // Dark's turn
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                if (testBoard[r][c]?.color === COLORS.DARK) {
+                if (testBoard[r][c]?.color === aiPlayerColor) {
                     const moves = computeDoubleMoves(testBoard, r, c);
                     for (const m of moves) {
-                        const next = applyDoubleMove(testBoard, r, c, m);
-                        const ev = minimax(next, depth - 1, alpha, beta, false);
-                        maxEval = Math.max(maxEval, ev);
-                        alpha = Math.max(alpha, ev);
+                        let next = applyMoveToBoard(testBoard, r, c, m.path.via.row, m.path.via.col);
+                        next = applyMoveToBoard(next, m.path.via.row, m.path.via.col, m.row, m.col);
+                        maxEval = Math.max(maxEval, minimax(next, depth - 1, alpha, beta, false));
+                        alpha = Math.max(alpha, maxEval);
                         if (beta <= alpha) break;
                     }
                 }
@@ -749,16 +870,16 @@ function minimax(testBoard, depth, alpha, beta, isMaximizing) {
         return maxEval;
     } else {
         let minEval = Infinity;
-        // White's turn
+        const enemy = (aiPlayerColor === COLORS.WHITE) ? COLORS.DARK : COLORS.WHITE;
         for (let r = 0; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-                if (testBoard[r][c]?.color === COLORS.WHITE) {
+                if (testBoard[r][c]?.color === enemy) {
                     const moves = computeDoubleMoves(testBoard, r, c);
                     for (const m of moves) {
-                        const next = applyDoubleMove(testBoard, r, c, m);
-                        const ev = minimax(next, depth - 1, alpha, beta, true);
-                        minEval = Math.min(minEval, ev);
-                        beta = Math.min(beta, ev);
+                        let next = applyMoveToBoard(testBoard, r, c, m.path.via.row, m.path.via.col);
+                        next = applyMoveToBoard(next, m.path.via.row, m.path.via.col, m.row, m.col);
+                        minEval = Math.min(minEval, minimax(next, depth - 1, alpha, beta, true));
+                        beta = Math.min(beta, minEval);
                         if (beta <= alpha) break;
                     }
                 }
@@ -768,150 +889,92 @@ function minimax(testBoard, depth, alpha, beta, isMaximizing) {
     }
 }
 
-function applyDoubleMove(b, fr, fc, m) {
-    let nb = applyMoveToBoard(b, fr, fc, m.path.via.row, m.path.via.col);
-    nb = applyMoveToBoard(nb, m.path.via.row, m.path.via.col, m.row, m.col);
-    return nb;
-}
-
-// ===== GAME OVER =====
-function triggerGameOver(winner) {
-    gameOver = true;
-    const w = winner === COLORS.WHITE ? 'White' : 'Dark';
-    $('gameover-title').textContent = `${w} Wins! 🏆`;
-    $('gameover-sub').textContent = `The King has been captured.`;
-    $('gameover-modal').classList.add('active');
-    renderBoard();
-}
-
-function initGame() {
-    board = createInitialBoard();
-    currentPlayer = COLORS.WHITE;
-    selectedCell = null; availableMoves = []; lastMoveHighlights = [];
-    moveLog = []; capturedByWhite = []; capturedByDark = [];
-    gameOver = false; pendingPromotion = null; turnNumber = 1;
-    aiThinking = false;
-    moveHistory = [];
-    saveToHistory(); // Initial state
-
-    $('move-log-list').innerHTML = '<div style="color:var(--text-secondary);font-size:12px;padding:4px;">Game started. White to move.</div>';
-    $('gameover-modal').classList.remove('active');
-    $('promotion-modal').classList.remove('active');
-    $('lobby-modal').classList.remove('active');
-    renderBoard();
-}
-
-function initSocket() {
-    try {
-        if (typeof io === 'undefined') {
-            console.warn('Socket.io not found (Static mode active). Online play unavailable.');
-            return;
+function evaluateBoard(testBoard) {
+    let score = 0;
+    const values = { K: 10000, R: 50, B: 35, N: 30, P: 10 };
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const p = testBoard[r][c];
+            if (!p) continue;
+            let val = values[p.type] || 0;
+            if (p.color === aiPlayerColor) score += val; else score -= val;
         }
-        socket = io();
-        socket.on('connect_error', () => {
-            console.warn('Could not connect to multiplayer server. Switching to Offline Mode.');
-            socket = null;
-        });
-        socket.on('room_created', ({ roomId: rid, color }) => {
-            roomId = rid; myColor = color; isOnline = true;
-            $('header-room-id').textContent = rid;
-            $('header-room-badge').style.display = 'flex';
-            $('mp-panel').style.display = 'block';
-            $('room-id-display').textContent = rid;
-            $('mp-status').textContent = 'Live — White player';
-            showStartScreen(false); initGame();
-        });
-        socket.on('room_joined', ({ roomId: rid, color }) => {
-            roomId = rid; myColor = color; isOnline = true;
-            $('header-room-id').textContent = rid;
-            $('header-room-badge').style.display = 'flex';
-            $('mp-panel').style.display = 'block';
-            $('room-id-display').textContent = rid;
-            $('mp-status').textContent = 'Live — Dark player';
-            showStartScreen(false); initGame();
-        });
-        socket.on('receive_state', s => loadState(s));
-        socket.on('timer_update', ({ clocks, activeColor }) => {
-            updateClockUI(clocks[activeColor]);
-        });
-        socket.on('timeout', ({ winner }) => {
-            triggerGameOver(winner, "Time Out!");
-        });
-        socket.on('opponent_joined', () => showFlash('Opponent joined!'));
-        socket.on('opponent_disconnected', () => showFlash('Opponent left.'));
-    } catch (e) {
-        console.warn('Offline Mode', e);
-        socket = null;
     }
+    return score;
+}
+
+// ===== MULTIPLAYER =====
+function initSocket() {
+    if (typeof io === 'undefined') return;
+    socket = io();
+    socket.on('room_created', ({ roomId: rid, color }) => { roomId = rid; myColor = color; isOnline = true; syncLobbyUI(rid, color); });
+    socket.on('room_joined', ({ roomId: rid, color }) => { roomId = rid; myColor = color; isOnline = true; syncLobbyUI(rid, color); });
+    socket.on('receive_state', s => { board = s.board; currentPlayer = s.currentPlayer; turnNumber = s.turnNumber; moveLog = s.moveLog; lastMoveHighlights = s.lastMoveHighlights; capturedByWhite = s.capturedByWhite; capturedByDark = s.capturedByDark; renderBoard(); rebuildLogUI(); });
+    socket.on('timer_update', ({ clocks, activeColor }) => { const s = clocks[activeColor]; const m = Math.floor(s / 60); const sc = s % 60; $('game-clock').textContent = `${m.toString().padStart(2, '0')}:${sc.toString().padStart(2, '0')}`; });
+    socket.on('timeout', ({ winner }) => { triggerGameOver(winner); showFlash("Time Out!"); });
+}
+
+function syncLobbyUI(rid, color) {
+    $('header-room-id').textContent = rid;
+    $('header-room-badge').style.display = 'flex';
+    $('mp-panel').style.display = 'block';
+    $('room-id-display').textContent = rid;
+    $('mp-status').textContent = `Live — Playing as ${color}`;
+    $('start-screen').style.display = 'none';
+    $('game-main').style.display = 'flex';
 }
 
 function syncState() {
     if (!socket || !roomId) return;
-    socket.emit('sync_state', {
-        roomId, state: {
-            board, currentPlayer, capturedByWhite, capturedByDark, moveLog, lastMoveHighlights, turnNumber
-        }
-    });
+    socket.emit('sync_state', { roomId, state: { board, currentPlayer, turnNumber, moveLog, lastMoveHighlights, capturedByWhite, capturedByDark } });
 }
 
-function loadState(s) {
-    board = s.board; currentPlayer = s.currentPlayer;
-    capturedByWhite = s.capturedByWhite; capturedByDark = s.capturedByDark;
-    moveLog = s.moveLog; lastMoveHighlights = s.lastMoveHighlights;
-    turnNumber = s.turnNumber; selectedCell = null; availableMoves = [];
-    renderBoard(); rebuildLogUI();
-}
+// ===== INITIALIZATION =====
+window.addEventListener('load', () => {
+    initSocket();
+    board = createInitialBoard();
+    renderBoard();
 
-function rebuildLogUI() {
-    const list = $('move-log-list');
-    list.innerHTML = '';
-    moveLog.forEach(e => {
-        const div = document.createElement('div');
-        div.className = 'move-entry'; div.id = `move-row-${e.num}`;
-        div.innerHTML = `<span class="move-num">${e.num}.</span><span class="move-white">${e.white}</span><span class="move-dark">${e.dark}</span>`;
-        list.appendChild(div);
+    $('btn-local').addEventListener('click', () => { isVsAI = false; $('lobby-modal').classList.add('active'); });
+    $('btn-vs-ai').addEventListener('click', () => { isVsAI = true; $('lobby-modal').classList.add('active'); });
+    $('btn-online').addEventListener('click', () => {
+        const row = $('online-room-row');
+        const isVisible = row.style.display === 'flex';
+        row.style.display = isVisible ? 'none' : 'flex';
     });
-    list.scrollTop = list.scrollHeight;
-}
-
-function showStartScreen(show) {
-    const ss = $('start-screen');
-    ss.style.display = show ? 'flex' : 'none';
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    initSocket(); initGame();
-
-    $('btn-local').addEventListener('click', () => {
-        isOnline = false; isVsAI = false;
-        $('lobby-modal').classList.add('active');
-    });
-
-    $('pick-white').addEventListener('click', () => {
-        playerViewColor = COLORS.WHITE;
-        $('lobby-modal').classList.remove('active');
-        showStartScreen(false); initGame();
-    });
-
-    $('pick-dark').addEventListener('click', () => {
-        playerViewColor = COLORS.DARK;
-        $('lobby-modal').classList.remove('active');
-        showStartScreen(false); initGame();
-    });
-
-    $('btn-vs-ai').addEventListener('click', () => {
-        isOnline = false; isVsAI = true;
-        playerViewColor = COLORS.WHITE;
-        showStartScreen(false); initGame();
-    });
-
+    $('pick-white').addEventListener('click', () => startGame(COLORS.WHITE));
+    $('pick-dark').addEventListener('click', () => startGame(COLORS.DARK));
+    $('unselect-btn').addEventListener('click', unselectPiece);
     $('btn-undo').addEventListener('click', undoMove);
-
     $('btn-create-room').addEventListener('click', () => socket.emit('create_room'));
-    $('btn-join-room').addEventListener('click', () => {
-        const id = $('join-room-input').value.trim().toUpperCase();
-        if (id) socket.emit('join_room', { roomId: id });
-    });
-    $('btn-new-game').addEventListener('click', initGame);
-    $('btn-play-again').addEventListener('click', initGame);
+    $('btn-join-room').addEventListener('click', () => { const id = $('join-room-input').value.trim().toUpperCase(); if (id) socket.emit('join_room', { roomId: id }); });
+    $('btn-new-game').addEventListener('click', () => location.reload()); // Simplest reset
+    $('btn-play-again').addEventListener('click', () => location.reload());
+
+    // Touch drag for mobile
+    initTouchDrag();
+
+    // Global drag cleanup
+    window.addEventListener('dragover', e => e.preventDefault());
+    window.addEventListener('drop', e => document.querySelectorAll('.tile').forEach(t => t.classList.remove('drag-over')));
 });
+
+function startGame(color) {
+    playerViewColor = color;
+    myColor = color;
+    aiPlayerColor = (color === COLORS.WHITE) ? COLORS.DARK : COLORS.WHITE;
+
+    $('lobby-modal').classList.remove('active');
+    $('start-screen').style.display = 'none';
+    $('game-main').style.display = 'flex';
+
+    board = createInitialBoard();
+    currentPlayer = COLORS.WHITE;
+    gameOver = false;
+    moveLog = []; capturedByWhite = []; capturedByDark = []; lastMoveHighlights = []; moveHistory = [];
+    turnNumber = 1;
+
+    renderBoard();
+    showFlash(`Match Started: You are ${color.toUpperCase()}`);
+    if (isVsAI && aiPlayerColor === COLORS.WHITE) setTimeout(makeAIMove, 800);
+}

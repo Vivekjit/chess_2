@@ -39,10 +39,10 @@
       <div class="start-logo">
         <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="64" height="64" rx="14" fill="#312E2B" />
-          <rect x="8" y="8" width="22" height="22" rx="3" fill="#739552" />
+          <rect x="8" y="8" width="22" height="22" rx="3" fill="#4B7399" />
           <rect x="34" y="8" width="22" height="22" rx="3" fill="#EBECD0" />
           <rect x="8" y="34" width="22" height="22" rx="3" fill="#EBECD0" />
-          <rect x="34" y="34" width="22" height="22" rx="3" fill="#739552" />
+          <rect x="34" y="34" width="22" height="22" rx="3" fill="#4B7399" />
           <text x="17" y="26" font-family="sans-serif" font-weight="900" font-size="14" fill="#EBECD0"
             text-anchor="middle">♟</text>
           <text x="45" y="26" font-family="sans-serif" font-weight="900" font-size="14" fill="#312E2B"
@@ -53,25 +53,35 @@
             text-anchor="middle">♞</text>
         </svg>
       </div>
-      <div class="start-title">CHESS 2</div>
+      <div class="start-title" style="color:var(--blue-light)">CHESS 2</div>
       <div class="start-subtitle">The Double-Action Skirmish</div>
       <div class="start-mode-btns">
-        <div class="start-modes">
-          <button id="btn-local" class="btn-primary">
-            <i class="fas fa-users"></i> Play Local (Same Device)
+        <div class="start-modes" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Play Local — emerald green -->
+          <button id="btn-local" class="btn"
+            style="width:100%; padding:16px; font-size:16px; background:linear-gradient(135deg,#27ae60,#1e8449); color:#fff; border:none; box-shadow:0 4px 18px rgba(39,174,96,0.35); border-radius:12px; font-weight:700; letter-spacing:0.3px; transition:all 0.2s;">
+            👥 Play Local (Same Device)
           </button>
-          <button id="btn-vs-ai" class="btn-primary" style="background: var(--chess-grey);">
-            <i class="fas fa-robot"></i> Play vs Computer
+          <!-- Play vs Computer — steel blue -->
+          <button id="btn-vs-ai" class="btn btn-primary"
+            style="width:100%; padding:16px; font-size:16px; background:var(--blue-dark); border:1px solid var(--blue-light);">
+            🤖 Play vs Computer
+          </button>
+          <!-- Play Online — vibrant indigo/purple -->
+          <button id="btn-online" class="btn"
+            style="width:100%; padding:16px; font-size:16px; background:linear-gradient(135deg,#5b4fcf,#7c3aed); color:#fff; border:none; box-shadow:0 4px 18px rgba(124,58,237,0.35); border-radius:12px; font-weight:700; letter-spacing:0.3px; transition:all 0.2s;">
+            🌐 Play Online
           </button>
         </div>
-        <div class="start-divider"></div>
-        <button class="btn btn-secondary" id="btn-create-room"
-          style="width:100%;padding:12px 20px;font-size:14px;margin-bottom:8px;">
-          🔗 Create Online Room
-        </button>
-        <div style="display:flex;gap:8px;">
-          <input class="room-input" id="join-room-input" placeholder="Enter Room Code" maxlength="6" />
-          <button class="btn btn-primary" id="btn-join-room" style="white-space:nowrap;padding:10px 14px;">Join</button>
+        <!-- Hidden room join row — wired during matchmaking step -->
+        <div id="online-room-row" style="display:none;flex-direction:column;gap:8px;margin-top:8px;">
+          <button class="btn btn-secondary" id="btn-create-room" style="width:100%;padding:12px 20px;font-size:14px;">🔗
+            Create Room</button>
+          <div style="display:flex;gap:8px;">
+            <input class="room-input" id="join-room-input" placeholder="Enter Room Code" maxlength="6" />
+            <button class="btn btn-primary" id="btn-join-room"
+              style="white-space:nowrap;padding:10px 14px;">Join</button>
+          </div>
         </div>
         <div id="start-status" style="font-size:12px;color:#739552;min-height:18px;margin-top:4px;"></div>
       </div>
@@ -84,10 +94,10 @@
     <div class="header-logo">
       <svg class="logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="36" height="36" rx="8" fill="#312E2B" />
-        <rect x="4" y="4" width="13" height="13" rx="2" fill="#739552" />
+        <rect x="4" y="4" width="13" height="13" rx="2" fill="#4B7399" />
         <rect x="19" y="4" width="13" height="13" rx="2" fill="#EBECD0" />
         <rect x="4" y="19" width="13" height="13" rx="2" fill="#EBECD0" />
-        <rect x="19" y="19" width="13" height="13" rx="2" fill="#739552" />
+        <rect x="19" y="19" width="13" height="13" rx="2" fill="#4B7399" />
       </svg>
       <div>
         <h1>CHESS 2</h1>
@@ -99,33 +109,40 @@
         <span class="dot"></span>
         Room: <span id="header-room-id" style="font-family:monospace;font-weight:700;letter-spacing:2px;"></span>
       </span>
-      <button class="btn btn-ghost" id="btn-new-game">↺ New Game</button>
+      <button class="btn btn-ghost header-action-btn" id="btn-undo">↩ Undo</button>
+      <button class="btn btn-ghost header-action-btn" id="btn-new-game">↺ New Game</button>
     </div>
   </header>
 
-  <div class="app-container">
+  <div class="app-container" id="game-main" style="display:none">
 
-    <!-- LEFT PANEL -->
     <div class="left-panel">
       <!-- Rules Quick Ref -->
       <div class="panel-card">
         <div class="panel-card-title">Rules</div>
-        <div class="rule-item">
+        <div class="rule-item" style="margin-bottom:12px;">
           <span class="rule-icon">⚡</span>
-          <span><strong style="color:var(--text-primary)">Double Action:</strong> Every piece moves twice per
-            turn</span>
+          <span><strong style="color:var(--text-primary)">Double Action:</strong> Every piece moves twice per turn. No
+            Queen exists.</span>
         </div>
-        <div class="rule-item">
+        <div class="rule-item" style="margin-bottom:12px;">
           <span class="rule-icon">🏰</span>
-          <span><strong style="color:#f87171">Rook:</strong> Never moves backward</span>
+          <span><strong style="color:var(--blue-light)">Rook Law:</strong> Never moves backward. Forward/Lateral
+            only.</span>
         </div>
-        <div class="rule-item">
+        <div class="rule-item" style="margin-bottom:12px;">
           <span class="rule-icon">👑</span>
-          <span><strong style="color:#facc15">Win:</strong> Capture the opponent's King</span>
+          <span><strong style="color:#facc15">Win:</strong> Capture the opponent's King to win instantly.</span>
+        </div>
+        <div class="rule-item" style="margin-bottom:12px;">
+          <span class="rule-icon">♟</span>
+          <span><strong style="color:var(--text-primary)">Promotion:</strong> Pawns promote at far edge (Rank 10 for
+            White).</span>
         </div>
         <div class="rule-item">
-          <span class="rule-icon">♟</span>
-          <span><strong style="color:var(--text-primary)">Pawn:</strong> Promotes at rank 10 (W) or rank 1 (B)</span>
+          <span class="rule-icon">🏃</span>
+          <span><strong style="color:var(--text-primary)">King Dash:</strong> King can move 2 squares total (2
+            actions).</span>
         </div>
       </div>
 
@@ -145,6 +162,7 @@
     <!-- BOARD AREA -->
     <div class="board-area">
       <div class="board-wrapper">
+        <div id="unselect-btn" class="unselect-btn">✕ Unselect Piece</div>
         <!-- Action pips -->
         <div class="action-indicator-bar">
           <div class="action-pip" id="pip-1"></div>
@@ -185,16 +203,15 @@
 
       <!-- Move Log -->
       <div class="panel-card move-log">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <div class="panel-card-title" style="margin-bottom:0;">Move Log</div>
-          <button id="btn-undo" class="btn btn-secondary" style="padding:4px 8px;font-size:11px;">↩ Undo</button>
-        </div>
+        <div class="panel-card-title">Move Log</div>
         <div class="move-log-list" id="move-log-list">
           <div style="color:var(--text-secondary);font-size:12px;padding:4px;">Game started. White to move.</div>
         </div>
       </div>
     </div>
+
   </div>
+
 
   <!-- ===== STATUS FLASH ===== -->
   <div class="status-flash" id="status-flash"></div>
