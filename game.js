@@ -370,8 +370,6 @@ function renderBoard() {
             }
 
             // Tile Events
-            tile.addEventListener('dragover', handleDragOver);
-            tile.addEventListener('drop', (e) => handleDrop(e, row, col));
             tile.addEventListener('click', () => handleTileClick(row, col));
 
             boardEl.appendChild(tile);
@@ -547,114 +545,7 @@ function undoMove() {
     showFlash('Move undone ↩');
 }
 
-// ===== DRAG & DROP (Desktop HTML5 DnD) =====
-function handleDragStart(e, row, col) {
-    if (gameOver || aiThinking || (isOnline && currentPlayer !== myColor)) {
-        e.preventDefault(); return;
-    }
-    e.dataTransfer.effectAllowed = 'move';
 
-    // If step1 is already chosen and user is dragging the SAME piece (at fromCell),
-    // flag this as an Action 2 drag so the drop knows to complete the move.
-    if (segmentedMoveState.active && segmentedMoveState.step1Cell &&
-        segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
-        e.dataTransfer.setData('text/plain', JSON.stringify({ row, col, isDragAction2: true }));
-        return;
-    }
-
-    // Action 1 drag: select piece and show blue auras
-    e.dataTransfer.setData('text/plain', JSON.stringify({ row, col }));
-    if (!segmentedMoveState.active ||
-        segmentedMoveState.fromCell.row !== row ||
-        segmentedMoveState.fromCell.col !== col) {
-        handleTileClick(row, col);
-    }
-}
-
-function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-
-function handleDrop(e, tr, tc) {
-    e.preventDefault();
-    document.querySelectorAll('.tile.drag-over').forEach(t => t.classList.remove('drag-over'));
-    if (!segmentedMoveState.active) return;
-
-    let isDragAction2 = false;
-    try { isDragAction2 = JSON.parse(e.dataTransfer.getData('text/plain')).isDragAction2 || false; } catch (_) { }
-
-    if (isDragAction2 && segmentedMoveState.step1Cell) {
-        const m2 = segmentedMoveState.availableStep2.find(x => x.row === tr && x.col === tc);
-        if (m2) executeSegmentedMove(segmentedMoveState.fromCell, segmentedMoveState.step1Cell, { row: tr, col: tc });
-    } else {
-        handleTileClick(tr, tc);
-    }
-}
-
-// ===== TOUCH DRAG (Mobile) =====
-let _touch = null; // { row, col, ghost, startX, startY }
-
-function initTouchDrag() {
-    const board = $('chess-board');
-    board.addEventListener('touchstart', e => {
-        const tile = e.target.closest('.tile');
-        if (!tile) return;
-        const row = +tile.dataset.row, col = +tile.dataset.col;
-        const piece = window._gameBoard ? window._gameBoard[row][col] : null; // expose via window below
-        // Only drag current player's own piece
-        const actualPiece = board.querySelector(`[data-row="${row}"][data-col="${col}"] .piece-img`);
-        if (!actualPiece) return;
-        if (gameOver || aiThinking || (isOnline && currentPlayer !== myColor)) return;
-
-        e.preventDefault();
-        const touch = e.touches[0];
-
-        // Select the piece (shows auras)
-        if (segmentedMoveState.active && segmentedMoveState.step1Cell &&
-            segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col) {
-            // mid-move Action 2 drag — keep selection
-        } else {
-            handleTileClick(row, col);
-        }
-
-        // Create ghost
-        const ghost = actualPiece.cloneNode(true);
-        ghost.style.cssText = `position:fixed;width:64px;height:64px;opacity:0.8;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:none;`;
-        ghost.style.left = touch.clientX + 'px';
-        ghost.style.top = touch.clientY + 'px';
-        document.body.appendChild(ghost);
-
-        _touch = {
-            row, col, ghost,
-            isDragAction2: !!(segmentedMoveState.active && segmentedMoveState.step1Cell &&
-                segmentedMoveState.fromCell.row === row && segmentedMoveState.fromCell.col === col)
-        };
-    }, { passive: false });
-
-    board.addEventListener('touchmove', e => {
-        if (!_touch) return;
-        e.preventDefault();
-        const t = e.touches[0];
-        _touch.ghost.style.left = t.clientX + 'px';
-        _touch.ghost.style.top = t.clientY + 'px';
-    }, { passive: false });
-
-    board.addEventListener('touchend', e => {
-        if (!_touch) return;
-        const t = e.changedTouches[0];
-        _touch.ghost.remove();
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        const tile = el ? el.closest('.tile') : null;
-        if (tile && segmentedMoveState.active) {
-            const tr = +tile.dataset.row, tc = +tile.dataset.col;
-            if (_touch.isDragAction2 && segmentedMoveState.step1Cell) {
-                const m2 = segmentedMoveState.availableStep2.find(x => x.row === tr && x.col === tc);
-                if (m2) executeSegmentedMove(segmentedMoveState.fromCell, segmentedMoveState.step1Cell, { row: tr, col: tc });
-            } else {
-                handleTileClick(tr, tc);
-            }
-        }
-        _touch = null;
-    });
-}
 
 
 // Final execution of double-move
@@ -967,13 +858,6 @@ window.addEventListener('load', () => {
     });
     $('btn-new-game').addEventListener('click', () => location.reload()); // Simplest reset
     $('btn-play-again').addEventListener('click', () => location.reload());
-
-    // Touch drag for mobile
-    initTouchDrag();
-
-    // Global drag cleanup
-    window.addEventListener('dragover', e => e.preventDefault());
-    window.addEventListener('drop', e => document.querySelectorAll('.tile').forEach(t => t.classList.remove('drag-over')));
 });
 
 function startGame(color) {
