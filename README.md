@@ -2,9 +2,11 @@
 
 Chess 2 is a tactical chess variant played on a **6×10 board** where **every piece gets two actions per turn**. The game ends when the opponent's **King is captured**.
 
-## 🚀 Features
-- **Minimax AI**: Play against the computer in a single-player mode.
-- **Double-Action System**: Pre-computed 2-move chains with single-click execution.
+## 🚀 Phase 4: UI Refinement (Latest)
+- **Compact Game Over Banner:** Replaced the blocking modal with a sleek, centrally floating card that keeps the board visible.
+- **Captured Pieces Panel:** Real-time rendering of all captured pieces in respective player sidebars.
+- **Apple Sans Integration:** Native system font stack for a premium, integrated experience.
+- **Mobile Polish:** Optimized banner and panel layouts for smaller screens.
 - **Responsive UI**: Premium Chess.com-inspired aesthetics that adapt to mobile and laptop screens.
 - **Multiplayer**: Integrated Socket.io for online room-based play.
 - **Tactical Rules**: Enforced Rook movement (no backward), Pawn promotion, and King dash.
