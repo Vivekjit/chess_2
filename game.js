@@ -379,7 +379,30 @@ function renderBoard() {
     });
 
     renderLabels();
+    renderCaptures();
     updateUI();
+}
+
+function renderCaptures() {
+    const wEl = $('captured-by-white');
+    const dEl = $('captured-by-dark');
+    if (!wEl || !dEl) return;
+
+    wEl.innerHTML = '';
+    capturedByWhite.forEach(p => {
+        const img = document.createElement('img');
+        img.src = `pieces/${p.color}-${pieceName(p.type).toLowerCase()}.svg`;
+        img.className = 'captured-piece';
+        wEl.appendChild(img);
+    });
+
+    dEl.innerHTML = '';
+    capturedByDark.forEach(p => {
+        const img = document.createElement('img');
+        img.src = `pieces/${p.color}-${pieceName(p.type).toLowerCase()}.svg`;
+        img.className = 'captured-piece';
+        dEl.appendChild(img);
+    });
 }
 
 function renderLabels() {
@@ -594,6 +617,7 @@ function finalizeTurn(notation) {
         setTimeout(makeAIMove, 600);
     }
     if (!isOnline) startLocalTimer();
+    renderCaptures();
 }
 
 function startLocalTimer() {
@@ -695,16 +719,26 @@ function checkWin(b) {
 function triggerGameOver(winner) {
     gameOver = true;
     stopLocalTimer();
-    const title = $('gameover-title');
+    const banner = $('game-over-banner');
+    const title = $('game-over-text');
+    const reason = $('game-over-reason');
+
     if (winner === 'draw') {
         title.textContent = "Game Drawn! ⚖️";
-        $('gameover-sub').textContent = "Time has run out for the current player.";
+        reason.textContent = "Time has run out for the current player.";
     } else {
+        const isWin = (isOnline && winner === myColor) || (!isOnline && winner === COLORS.WHITE);
         const wName = winner === COLORS.WHITE ? 'White' : 'Dark';
-        title.textContent = `${wName} Wins! 🏆`;
-        $('gameover-sub').textContent = "The King has been captured.";
+
+        if (isOnline) {
+            title.textContent = (winner === myColor) ? "YOU WON! 🏆" : "YOU LOST! 💀";
+        } else {
+            title.textContent = `${wName} Wins! 🏆`;
+        }
+        reason.textContent = "The King has been captured.";
     }
-    $('gameover-modal').classList.add('active');
+
+    banner.classList.add('active');
     renderBoard();
 }
 
@@ -727,6 +761,7 @@ function undoMove() {
     gameOver = false;
     rebuildLogUI();
     renderBoard();
+    renderCaptures();
     showFlash("Turn Undone");
 }
 
@@ -921,7 +956,8 @@ function startGame(color) {
 
     moveLog = []; capturedByWhite = []; capturedByDark = []; lastMoveHighlights = []; moveHistory = [];
     turnNumber = 1;
-
+    $('game-over-banner').classList.remove('active');
+    renderCaptures();
     renderBoard();
     showFlash(`Match Started: You are ${color.toUpperCase()}`);
     if (isVsAI && aiPlayerColor === COLORS.WHITE) setTimeout(makeAIMove, 800);

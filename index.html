@@ -152,6 +152,13 @@
 
     <!-- BOARD AREA -->
     <div class="board-area">
+      <div id="game-over-banner" class="game-over-banner">
+        <div id="game-over-text" class="game-over-text">White Wins!</div>
+        <div id="game-over-reason" class="game-over-reason">The King has been captured.</div>
+        <div class="game-over-btns">
+          <button class="btn btn-primary" onclick="location.reload()">↺ Play Again</button>
+        </div>
+      </div>
       <div class="board-wrapper">
         <div id="unselect-btn" class="unselect-btn">✕ Unselect Piece</div>
         <!-- Action pips -->
@@ -259,16 +266,7 @@
     </div>
   </div>
 
-  <!-- ===== GAME OVER MODAL ===== -->
-  <div class="modal-overlay" id="gameover-modal">
-    <div class="modal">
-      <div class="gameover-trophy">🏆</div>
-      <div class="gameover-title" id="gameover-title">White Wins!</div>
-      <div class="gameover-sub" id="gameover-sub">The King has been captured.</div>
-      <button class="btn btn-primary" id="btn-play-again" style="width:100%;padding:14px;font-size:15px;">Play
-        Again</button>
-    </div>
-  </div>
+
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="game.js"></script>
