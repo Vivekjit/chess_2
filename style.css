@@ -1140,32 +1140,52 @@ header {
 /* ===== NON-BLOCKING GAME OVER ===== */
 .game-over-banner {
   display: none;
-  background: rgba(39, 36, 34, 0.98);
-  backdrop-filter: blur(12px);
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 28, 26, 0.95);
+  backdrop-filter: blur(16px);
   border: 1px solid var(--blue-light);
-  border-radius: 16px;
-  padding: 16px 32px;
-  margin-bottom: 24px;
+  border-radius: 20px;
+  padding: 16px 28px;
   text-align: center;
-  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6);
-  animation: bannerSlideDown 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-  width: 100%;
-  max-width: 500px;
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(75, 115, 153, 0.2);
+  animation: bannerSlideDown 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  width: 90%;
+  max-width: 480px;
+  z-index: 2000;
+  flex-direction: column;
+  gap: 4px;
+}
+
+@media (max-width: 600px) {
+  .game-over-banner {
+    top: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    border-radius: 0 0 16px 16px;
+    border-top: none;
+    padding: 12px 20px;
+    background: rgba(26, 25, 23, 0.98);
+  }
 }
 
 .game-over-banner.active {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .game-over-text {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 900;
   color: var(--blue-light);
   text-transform: uppercase;
   letter-spacing: 2px;
-  text-shadow: 0 0 20px rgba(106, 150, 193, 0.3);
 }
 
 .game-over-reason {
@@ -1178,17 +1198,31 @@ header {
   display: flex;
   gap: 12px;
   justify-content: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 @keyframes bannerSlideDown {
   from {
-    transform: translateY(-30px);
+    transform: translate(-50%, -100%);
     opacity: 0;
   }
 
   to {
-    transform: translateY(0);
+    transform: translate(-50%, 0);
     opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  @keyframes bannerSlideDown {
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 }
