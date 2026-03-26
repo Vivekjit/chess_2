@@ -909,9 +909,17 @@ function initSocket() {
     socket = io();
     socket.on('room_created', ({ roomId: rid, color }) => { roomId = rid; myColor = color; isOnline = true; syncLobbyUI(rid, color); });
     socket.on('room_joined', ({ roomId: rid, color }) => { roomId = rid; myColor = color; isOnline = true; syncLobbyUI(rid, color); });
+    socket.on('match_found', ({ roomId: rid, color }) => {
+        roomId = rid; myColor = color; isOnline = true;
+        $('searching-overlay').classList.remove('active');
+        $('online-modal').classList.remove('active');
+        showFlash(`Match Found! Playing as ${color.toUpperCase()}`);
+        syncLobbyUI(rid, color);
+    });
     socket.on('receive_state', s => { board = s.board; currentPlayer = s.currentPlayer; turnNumber = s.turnNumber; moveLog = s.moveLog; lastMoveHighlights = s.lastMoveHighlights; capturedByWhite = s.capturedByWhite; capturedByDark = s.capturedByDark; renderBoard(); rebuildLogUI(); });
     socket.on('timer_update', ({ clocks, activeColor }) => { const s = clocks[activeColor]; const m = Math.floor(s / 60); const sc = s % 60; $('game-clock').textContent = `${m.toString().padStart(2, '0')}:${sc.toString().padStart(2, '0')}`; });
     socket.on('timeout', ({ winner }) => { triggerGameOver(winner); showFlash("Time Out!"); });
+    socket.on('opponent_disconnected', () => { showFlash("Opponent Disconnected", 5000); });
 }
 
 function syncLobbyUI(rid, color) {
@@ -938,16 +946,25 @@ window.addEventListener('load', () => {
     $('btn-local').addEventListener('click', () => { isVsAI = false; $('lobby-modal').classList.add('active'); });
     $('btn-vs-ai').addEventListener('click', () => { isVsAI = true; $('lobby-modal').classList.add('active'); });
     $('btn-online').addEventListener('click', () => {
-        const row = $('online-room-row');
-        const isVisible = row.style.display === 'flex';
-        row.style.display = isVisible ? 'none' : 'flex';
+        $('online-modal').classList.add('active');
+    });
+    $('btn-quick-match').addEventListener('click', () => {
+        socket.emit('quick_match');
+        $('searching-overlay').classList.add('active');
+    });
+    $('btn-cancel-match').addEventListener('click', () => {
+        socket.emit('cancel_match');
+        $('searching-overlay').classList.remove('active');
     });
     $('pick-white').addEventListener('click', () => startGame(COLORS.WHITE));
     $('pick-dark').addEventListener('click', () => startGame(COLORS.DARK));
     $('unselect-btn').addEventListener('click', unselectPiece);
     $('btn-undo').addEventListener('click', undoMove);
     $('btn-create-room').addEventListener('click', () => socket.emit('create_room'));
-    $('btn-join-room').addEventListener('click', () => { const id = $('join-room-input').value.trim().toUpperCase(); if (id) socket.emit('join_room', { roomId: id }); });
+    $('btn-join-room').addEventListener('click', () => {
+        const id = $('join-room-input').value.trim().toUpperCase();
+        if (id) socket.emit('join_room', { roomId: id });
+    });
     $('btn-new-game').addEventListener('click', () => location.reload()); // Simplest reset
     $('btn-play-again').addEventListener('click', () => location.reload());
 

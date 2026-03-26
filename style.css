@@ -1052,3 +1052,61 @@ header {
     font-size: 32px;
   }
 }
+
+/* Matchmaking Modal */
+.matchmaking-modal {
+  max-width: 420px;
+}
+
+.mm-options {
+  margin: 20px 0;
+}
+
+.btn-lg {
+  padding: 16px;
+  font-size: 16px;
+  background: linear-gradient(135deg, var(--blue-light), var(--blue-dark));
+  box-shadow: 0 4px 15px rgba(75, 115, 153, 0.4);
+}
+
+/* Searching Spinner */
+.searching-spinner {
+  width: 80px;
+  height: 80px;
+  margin: 20px auto;
+  border-radius: 50%;
+  position: relative;
+}
+
+.searching-spinner::after,
+.searching-spinner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 4px solid var(--blue-light);
+  border-radius: 50%;
+  animation: mm-pulse 2s linear infinite;
+}
+
+.searching-spinner::before {
+  animation-delay: 1s;
+}
+
+@keyframes mm-pulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}

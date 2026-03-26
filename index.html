@@ -73,20 +73,12 @@
             🌐 Play Online
           </button>
         </div>
-        <!-- Hidden room join row — wired during matchmaking step -->
-        <div id="online-room-row" style="display:none;flex-direction:column;gap:8px;margin-top:8px;">
-          <button class="btn btn-secondary" id="btn-create-room" style="width:100%;padding:12px 20px;font-size:14px;">🔗
-            Create Room</button>
-          <div style="display:flex;gap:8px;">
-            <input class="room-input" id="join-room-input" placeholder="Enter Room Code" maxlength="6" />
-            <button class="btn btn-primary" id="btn-join-room"
-              style="white-space:nowrap;padding:10px 14px;">Join</button>
-          </div>
-        </div>
+        <!-- Playing Online options move to a modal for better flow -->
         <div id="start-status" style="font-size:12px;color:#739552;min-height:18px;margin-top:4px;"></div>
       </div>
-      <div style="margin-top:24px;font-size:11px;color:#8B8987;text-align:center;">Design by Dodo · Chess 2</div>
     </div>
+    <div style="margin-top:24px;font-size:11px;color:#8B8987;text-align:center;">Design by Dodo · Chess 2</div>
+  </div>
   </div>
 
   <!-- ===== MAIN APP ===== -->
@@ -222,6 +214,49 @@
       <div class="modal-title">♟ Promote Pawn</div>
       <div class="modal-sub">Choose your new piece</div>
       <div class="modal-pieces" id="promotion-choices"></div>
+    </div>
+  </div>
+
+  <!-- ===== ONLINE MATCHMAKING MODAL ===== -->
+  <div class="modal-overlay" id="online-modal">
+    <div class="modal matchmaking-modal">
+      <div class="modal-title">🌐 Play Online</div>
+      <div class="modal-sub">Match with anyone or join a friend</div>
+
+      <div class="mm-options">
+        <button id="btn-quick-match" class="btn btn-primary btn-lg" style="width:100%; margin-bottom:16px;">
+          ⚡ Quick Match (Random)
+        </button>
+
+        <div style="border-top:1px solid var(--border); margin:16px 0; position:relative;">
+          <span
+            style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:var(--bg-card); padding:0 12px; font-size:11px; color:var(--text-secondary); text-transform:uppercase;">or
+            join by code</span>
+        </div>
+
+        <button class="btn btn-secondary" id="btn-create-room" style="width:100%; padding:14px; margin-bottom:12px;">🔗
+          Create Room</button>
+
+        <div style="display:flex;gap:8px;">
+          <input class="room-input" id="join-room-input" placeholder="Enter Room Code" maxlength="6"
+            style="flex:1; background:rgba(0,0,0,0.15);" />
+          <button class="btn btn-primary" id="btn-join-room" style="padding:0 20px;">Join</button>
+        </div>
+      </div>
+
+      <button class="btn btn-ghost" onclick="$('online-modal').classList.remove('active')"
+        style="margin-top:20px; width:100%;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ===== SEARCHING OVERLAY ===== -->
+  <div class="modal-overlay" id="searching-overlay">
+    <div class="modal" style="text-align:center;">
+      <div class="searching-spinner"></div>
+      <div class="modal-title" style="margin-top:20px;">Searching...</div>
+      <div class="modal-sub">Finding a worthy opponent</div>
+      <button class="btn btn-secondary" id="btn-cancel-match" style="margin-top:24px; width:100%;">Cancel
+        Search</button>
     </div>
   </div>
 
